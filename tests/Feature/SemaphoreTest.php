@@ -91,7 +91,7 @@ class SemaphoreTest extends TestCase
 
     public function test_every_semaphore_route_is_admin_only(): void
     {
-        $routes = [['get', '/semaphore'], ['post', '/semaphore/connection'], ['delete', '/semaphore/connection'], ['get', '/semaphore/run'], ['post', '/semaphore/run/confirm'],
+        $routes = [['get', '/semaphore'], ['get', '/workbooks'], ['post', '/semaphore/inventory'], ['post', '/semaphore/inventory/sync'], ['delete', '/semaphore/inventory'], ['get', '/semaphore/hosts'], ['post', '/semaphore/hosts'], ['post', '/semaphore/connection'], ['delete', '/semaphore/connection'], ['get', '/semaphore/run'], ['post', '/semaphore/run/confirm'],
             ['post', '/semaphore/run'], ['get', '/semaphore/tasks/1/100'], ['get', '/semaphore/tasks/1/100/status'], ['post', '/semaphore/tasks/1/100/stop']];
 
         foreach ($routes as [$method, $uri]) {
@@ -112,7 +112,7 @@ class SemaphoreTest extends TestCase
         $this->sem->templates[0]['name'] = '<script>alert(1)</script>';
         $this->sem->tasks[55] = ['id' => 55, 'status' => 'success', 'template_id' => 7, 'tpl_alias' => 'Update packages', 'created' => '2026-01-01T00:00:00Z', 'limit' => 'web1', 'message' => 'weekly'];
 
-        $page = $this->actingAs($this->admin)->get('/semaphore')->assertOk()
+        $page = $this->actingAs($this->admin)->get('/workbooks')->assertOk()
             ->assertSee('Home Lab')->assertSee('Deploy app')->assertSee('playbooks/update.yml')->assertSee('Recent runs')->assertSee('weekly');
 
         $this->assertStringNotContainsString('<script>alert(1)</script>', $page->getContent());
@@ -124,7 +124,7 @@ class SemaphoreTest extends TestCase
         $this->connect();
         $this->sem->token = 'rotated';
 
-        $this->actingAs($this->admin)->get('/semaphore')->assertOk()->assertSee('rejected the API token');
+        $this->actingAs($this->admin)->get('/workbooks')->assertOk()->assertSee('rejected the API token');
     }
 
     // ---------------------------------------------------------------- running
@@ -144,7 +144,7 @@ class SemaphoreTest extends TestCase
             ->assertSee('Update packages')->assertSee('value="docker-1"', false)->assertSee('value="nas"', false)->assertSee('value="Home_Lab"', false)
             ->assertSee('Check mode');
 
-        $this->get('/semaphore/run?project=1&template=999')->assertRedirect(route('semaphore.index'))->assertSessionHasErrors('semaphore');
+        $this->get('/semaphore/run?project=1&template=999')->assertRedirect(route('workbooks.index'))->assertSessionHasErrors('semaphore');
     }
 
     public function test_confirming_shows_exactly_what_will_run_and_starts_nothing(): void
@@ -252,7 +252,7 @@ class SemaphoreTest extends TestCase
         $this->actingAs($this->admin);
 
         $this->post('/semaphore/run/confirm', $this->runInput(['limit_extra' => 'a;b']))->assertRedirect()->assertSessionHasErrors('semaphore');
-        $this->post('/semaphore/run', $this->runInput(['limit' => 'a;b', 'confirm' => 1]))->assertRedirect(route('semaphore.index'))->assertSessionHasErrors('semaphore');
+        $this->post('/semaphore/run', $this->runInput(['limit' => 'a;b', 'confirm' => 1]))->assertRedirect(route('workbooks.index'))->assertSessionHasErrors('semaphore');
 
         $this->assertSame([], $this->sem->posts());
     }
@@ -332,7 +332,7 @@ class SemaphoreTest extends TestCase
         $this->assertStringContainsString("needs the variable 'count' (How many)", session('errors')->first('semaphore'));
 
         $this->post('/semaphore/run', ['project_id' => 1, 'template_id' => 7, 'confirm' => 1, 'extra_vars' => '{"version":"1"}'])
-            ->assertRedirect(route('semaphore.index'))->assertSessionHasErrors('semaphore');
+            ->assertRedirect(route('workbooks.index'))->assertSessionHasErrors('semaphore');
         $this->assertSame([], $this->sem->posts(), 'the start step checks again');
     }
 
@@ -352,7 +352,7 @@ class SemaphoreTest extends TestCase
 
         // Template 8 declares nothing, so LabMan cannot pre-check; Semaphore itself refuses with a bare 400.
         $this->actingAs($this->admin)->post('/semaphore/run', ['project_id' => 1, 'template_id' => 8, 'confirm' => 1, 'extra_vars' => '{"anything":"1"}'])
-            ->assertRedirect(route('semaphore.index'))->assertSessionHasErrors('semaphore');
+            ->assertRedirect(route('workbooks.index'))->assertSessionHasErrors('semaphore');
 
         $this->assertStringContainsString('does not declare as a survey variable', session('errors')->first('semaphore'));
     }

@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Inventory\Slug;
-use App\Models\Server;
 use App\Semaphore\Connection;
+use App\Semaphore\HostSync;
+use App\Semaphore\Targets;
 use App\Semaphore\RunOptions;
 use App\Semaphore\SemaphoreClient;
 use App\Semaphore\SemaphoreException;
@@ -19,28 +19,118 @@ class SemaphoreController extends Controller
 {
     private const FINISHED = ['success', 'error', 'stopped'];
 
-    public function index(Request $request)
+    public function index()
     {
-        $data = ['connection' => Connection::summary(), 'projects' => [], 'projectId' => null, 'templates' => [], 'recent' => [], 'error' => null];
+        $data = ['connection' => Connection::summary(), 'choices' => [], 'target' => HostSync::target(), 'error' => null];
 
         if ($data['connection']) {
             try {
-                $client = SemaphoreClient::fromStored();
-                $data['projects'] = $client->projects();
-                $data['projectId'] = (int) ($request->query('project') ?: ($data['projects'][0]['id'] ?? 0)) ?: null;
-
-                if ($data['projectId']) {
-                    $data['templates'] = $client->templates($data['projectId']);
-                    $data['recent'] = $client->recentTasks($data['projectId']);
-                }
+                $data['choices'] = HostSync::choices(SemaphoreClient::fromStored());
             } catch (SemaphoreException $e) {
                 $data['error'] = $e->getMessage();
             }
         }
 
-        return view('semaphore.index', $data);
+        return view('semaphore.index', $data + [
+            'last' => HostSync::lastSync(), 'known' => HostSync::known(), 'strangers' => HostSync::strangers(),
+            'servers' => \App\Models\Server::count(),
+        ]);
     }
 
+    /** Choose the Semaphore inventory to keep up to date, and whether that happens on every server change. */
+    public function inventorySave(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['inventory' => ['required', 'regex:/^\d+:\d+$/']]);
+        [$project, $id] = array_map('intval', explode(':', $data['inventory']));
+
+        try {
+            HostSync::load(SemaphoreClient::fromStored(), $project, $id); // refuses anything that is not a readable static inventory
+        } catch (SemaphoreException $e) {
+            throw ValidationException::withMessages(['inventory' => $e->getMessage()]);
+        }
+
+        HostSync::saveTarget($project, $id, $request->boolean('auto'));
+        HostSync::watch(true);
+
+        return redirect()->route('semaphore.index')->with('status', 'Saved. LabMan read the host list'.($request->boolean('auto') ? ' and will keep it up to date whenever your servers change.' : '. Use "Update Semaphore now" to write your servers into it.'));
+    }
+
+    public function inventoryClear(): RedirectResponse
+    {
+        HostSync::forgetTarget();
+
+        return redirect()->route('semaphore.index')->with('status', 'LabMan no longer reads or updates a Semaphore inventory.');
+    }
+
+    /** Write the servers into the chosen inventory now (also the way to do it when automatic updates are off). */
+    public function inventorySync(): RedirectResponse
+    {
+        try {
+            $result = HostSync::sync();
+        } catch (SemaphoreException $e) {
+            return redirect()->route('semaphore.index')->withErrors(['semaphore' => $e->getMessage()]);
+        }
+
+        $parts = array_filter([$result['added'] ? $result['added'].' host(s) added' : null, $result['updated'] ? $result['updated'].' updated' : null, $result['removed'] ? $result['removed'].' removed' : null]);
+
+        return redirect()->route('semaphore.index')->with('status', $parts ? 'Semaphore updated: '.implode(', ', $parts).'.' : 'Semaphore already matches your servers; nothing to change.');
+    }
+
+    /** Hosts in Semaphore that LabMan does not have, with a choice per host. */
+    public function hosts()
+    {
+        $strangers = HostSync::strangers();
+        $names = \App\Models\Server::pluck('name')->map(fn ($n) => mb_strtolower($n))->all();
+
+        $rows = [];
+        foreach ($strangers as $name => $info) {
+            $address = \App\Inventory\HostMatcher::address($name, $info['vars']) ?? $name;
+            $rows[] = ['host' => $name, 'address' => $address, 'group' => $info['groups'][0] ?? null, 'clash' => in_array(mb_strtolower($name), $names, true)];
+        }
+
+        return view('semaphore.hosts', ['rows' => $rows, 'known' => HostSync::known()]);
+    }
+
+    public function hostsApply(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['choice' => ['array'], 'choice.*' => ['in:add,ignore,leave'], 'name' => ['array'], 'name.*' => ['nullable', 'string', 'max:100']]);
+        $strangers = HostSync::strangers();
+        $added = 0;
+        $ignored = [];
+        $problems = [];
+
+        foreach ($data['choice'] ?? [] as $host => $choice) {
+            if (! isset($strangers[$host])) {
+                continue;
+            }
+
+            if ($choice === 'ignore') {
+                $ignored[] = $host;
+            } elseif ($choice === 'add') {
+                $info = $strangers[$host];
+                try {
+                    $payload = \App\Domain\ServerInput::validate([
+                        'name' => trim((string) ($data['name'][$host] ?? '')) ?: $host,
+                        'address' => \App\Inventory\HostMatcher::address($host, $info['vars']) ?? $host,
+                        'group' => $info['groups'][0] ?? null, 'ssh_port' => 22,
+                    ]);
+                    \App\Models\Server::create($payload + ['inventory_host' => $host]);
+                    $added++;
+                } catch (ValidationException $e) {
+                    $problems[] = "{$host}: ".implode(' ', $e->validator->errors()->all());
+                }
+            }
+        }
+
+        if ($ignored) {
+            HostSync::ignore($ignored);
+        }
+        HostSync::settleNotice();
+
+        $back = redirect()->route($problems ? 'semaphore.hosts' : 'semaphore.index')->with('status', "{$added} server(s) added to LabMan".($ignored ? ', '.count($ignored).' ignored' : '').'.');
+
+        return $problems ? $back->withErrors(['semaphore' => implode(' ', $problems)]) : $back;
+    }
     public function connect(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -73,11 +163,11 @@ class SemaphoreController extends Controller
         try {
             $found = $this->findTemplate($project, $template);
         } catch (SemaphoreException $e) {
-            return redirect()->route('semaphore.index')->withErrors(['semaphore' => $e->getMessage()]);
+            return redirect()->route('workbooks.index')->withErrors(['semaphore' => $e->getMessage()]);
         }
 
         return view('semaphore.run', [
-            'project' => $project, 'template' => $found, 'survey' => SurveyVars::declared($found), 'targets' => $this->targets(), 'old' => session()->getOldInput(),
+            'project' => $project, 'template' => $found, 'survey' => SurveyVars::declared($found), 'targets' => Targets::all(), 'old' => session()->getOldInput() + ['hosts' => (array) $request->query('hosts', []), 'groups' => (array) $request->query('groups', [])],
         ]);
     }
 
@@ -111,11 +201,11 @@ class SemaphoreController extends Controller
             $options = SurveyVars::check($options, $this->findTemplate($options['project_id'], $options['template_id']));
             $task = SemaphoreClient::fromStored()->run($options['project_id'], RunOptions::payload($options));
         } catch (SemaphoreException $e) {
-            return redirect()->route('semaphore.index')->withErrors(['semaphore' => $e->getMessage()]);
+            return redirect()->route('workbooks.index')->withErrors(['semaphore' => $e->getMessage()]);
         }
 
         if (empty($task['id'])) {
-            return redirect()->route('semaphore.index')->withErrors(['semaphore' => 'Semaphore did not return a task id.']);
+            return redirect()->route('workbooks.index')->withErrors(['semaphore' => 'Semaphore did not return a task id.']);
         }
 
         return redirect()->route('semaphore.task', ['project' => $options['project_id'], 'task' => (int) $task['id']])
@@ -129,7 +219,7 @@ class SemaphoreController extends Controller
             $info = $client->task($project, $task);
             $output = $client->output($project, $task);
         } catch (SemaphoreException $e) {
-            return redirect()->route('semaphore.index')->withErrors(['semaphore' => $e->getMessage()]);
+            return redirect()->route('workbooks.index')->withErrors(['semaphore' => $e->getMessage()]);
         }
 
         return view('semaphore.task', [
@@ -200,17 +290,6 @@ class SemaphoreController extends Controller
             'extra_vars' => $request->input('extra_vars'),
             'survey' => (array) $request->input('survey', []),
             'message' => $request->input('message', ''),
-        ];
-    }
-
-    /** Names LabMan knows, for the limit picker. @return array{groups: list<string>, hosts: list<array{name: string, label: string}>} */
-    private function targets(): array
-    {
-        $servers = Server::orderBy('name')->get();
-
-        return [
-            'groups' => $servers->pluck('group')->filter()->map(fn ($g) => Slug::group($g))->unique()->sort()->values()->all(),
-            'hosts' => $servers->map(fn (Server $s) => ['name' => $s->inventory_host ?: Slug::host($s->name), 'label' => $s->name])->all(),
         ];
     }
 

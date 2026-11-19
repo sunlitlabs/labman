@@ -14,7 +14,9 @@ use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\StatusController;
+use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\WorkbookController;
 use Illuminate\Support\Facades\Route;
 
 // First-run wizard (the RedirectToSetup middleware gates it).
@@ -65,6 +67,13 @@ Route::middleware('admin')->group(function () {
     Route::get('/semaphore', [SemaphoreController::class, 'index'])->name('semaphore.index');
     Route::post('/semaphore/connection', [SemaphoreController::class, 'connect'])->name('semaphore.connect');
     Route::delete('/semaphore/connection', [SemaphoreController::class, 'disconnect'])->name('semaphore.disconnect');
+    Route::get('/workbooks', [WorkbookController::class, 'index'])->name('workbooks.index');
+    Route::post('/semaphore/inventory', [SemaphoreController::class, 'inventorySave'])->name('semaphore.inventory.save');
+    Route::delete('/semaphore/inventory', [SemaphoreController::class, 'inventoryClear'])->name('semaphore.inventory.clear');
+    Route::post('/semaphore/inventory/sync', [SemaphoreController::class, 'inventorySync'])->name('semaphore.inventory.sync');
+    Route::get('/semaphore/hosts', [SemaphoreController::class, 'hosts'])->name('semaphore.hosts');
+    Route::post('/semaphore/hosts', [SemaphoreController::class, 'hostsApply'])->name('semaphore.hosts.apply');
+    Route::post('/notices/{notice}/dismiss', [NoticeController::class, 'dismiss'])->name('notices.dismiss');
     Route::get('/semaphore/run', [SemaphoreController::class, 'runForm'])->name('semaphore.run');
     Route::post('/semaphore/run/confirm', [SemaphoreController::class, 'runConfirm'])->name('semaphore.run.confirm');
     Route::post('/semaphore/run', [SemaphoreController::class, 'runStart'])->name('semaphore.run.start');

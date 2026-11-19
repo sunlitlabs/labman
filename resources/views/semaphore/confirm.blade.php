@@ -3,8 +3,8 @@
 @section('title', 'Confirm run')
 
 @section('focus', '1')
-@section('crumb', 'Semaphore')
-@section('crumb_url', route('semaphore.index'))
+@section('crumb', 'Workbooks')
+@section('crumb_url', route('workbooks.index'))
 
 @section('admin')
     <div class="wide">

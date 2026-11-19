@@ -67,7 +67,7 @@
 
   // A long action (a push to git, a sync) says what it is doing and cannot be double-submitted.
   document.addEventListener('submit', function (e) {
-    var btn = e.target.querySelector && e.target.querySelector('button[data-busy]');
+    var btn = e.submitter && e.submitter.matches && e.submitter.matches('button[data-busy]') ? e.submitter : null;
     if (!btn || e.defaultPrevented) return;
     var status = document.createElement('p');
     status.className = 'muted busy-note';
@@ -77,6 +77,29 @@
     btn.textContent = btn.getAttribute('data-busy');
     window.setTimeout(function () { btn.disabled = true; }, 0);
   });
+
+  // Filter the group / server pickers on the run form.
+  document.querySelectorAll('[data-filter-targets]').forEach(function (input) {
+    input.addEventListener('input', function () {
+      var q = input.value.trim().toLowerCase();
+      document.querySelectorAll('[data-target-name]').forEach(function (el) {
+        el.hidden = q !== '' && el.getAttribute('data-target-name').indexOf(q) === -1;
+      });
+    });
+  });
+
+  // Server list: ticking servers enables "Run a workbook on the selected".
+  var bulk = document.querySelector('[data-bulk-run]');
+  if (bulk) {
+    var refreshBulk = function () {
+      var n = document.querySelectorAll('input[data-pick-server]:checked').length;
+      bulk.hidden = n === 0;
+      var label = bulk.querySelector('[data-bulk-count]');
+      if (label) label.textContent = n + ' selected';
+    };
+    document.addEventListener('change', function (e) { if (e.target.matches && e.target.matches('input[data-pick-server]')) refreshBulk(); });
+    refreshBulk();
+  }
 
   // Destructive buttons carry data-confirm (inline handlers are blocked by the CSP).
   document.addEventListener('click', function (e) {

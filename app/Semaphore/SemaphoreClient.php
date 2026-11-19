@@ -57,6 +57,22 @@ final class SemaphoreClient
         return $this->list($this->send('get', "/api/project/{$project}/templates")->json());
     }
 
+    /** A project's inventories (static ones carry their host list in "inventory"). @return list<array<string, mixed>> */
+    public function inventories(int $project): array
+    {
+        return $this->list($this->send('get', "/api/project/{$project}/inventory")->json());
+    }
+
+    /**
+     * Save a changed inventory object (the whole object as Semaphore returned it, with the new content).
+     *
+     * @param  array<string, mixed>  $inventory
+     */
+    public function saveInventory(int $project, array $inventory): void
+    {
+        $this->send('put', "/api/project/{$project}/inventory/".(int) $inventory['id'], $inventory);
+    }
+
     /** The most recent tasks of a project. @return list<array<string, mixed>> */
     public function recentTasks(int $project): array
     {

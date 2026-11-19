@@ -49,6 +49,7 @@
         <div class="flash" role="status">{{ session('status') }}</div>
     @endif
     @include('partials.errors')
+    @can('admin')@include('partials.notices')@endcan
 
     @yield('content')
 </main>

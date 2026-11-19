@@ -316,7 +316,7 @@ fieldset.plain { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
 .rows { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .row {
   display: grid;
-  grid-template-columns: 110px minmax(110px, 1fr) minmax(130px, 1.1fr) minmax(190px, 1.4fr) minmax(160px, 1.5fr) 54px;
+  grid-template-columns: 110px minmax(110px, 1fr) minmax(130px, 1.1fr) minmax(190px, 1.4fr) minmax(160px, 1.5fr) 96px;
   gap: 4px 14px;
   align-items: center;
   padding: 10px 14px;
@@ -488,3 +488,12 @@ details.formcard > summary { cursor: pointer; font-weight: 600; }
 .sync-status { margin: 0 0 16px; }
 .sync-status h2 { display: flex; align-items: center; gap: 10px; }
 .busy-note { margin: 8px 0 0; }
+
+.rowpick { display: inline-flex; align-items: center; margin-right: 8px; }
+.sem-tag { display: block; font-size: 0.78rem; color: var(--muted); }
+.sem-tag.missing { color: var(--degraded, var(--muted)); }
+.bulkbar { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: var(--card, var(--bg)); border-top: 1px solid var(--border); box-shadow: 0 -4px 12px rgba(0,0,0,.08); margin-top: 12px; }
+.bulkbar[hidden] { display: none; }
+.notices { display: grid; gap: 8px; margin-bottom: 14px; }
+.notice-bar { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--border); border-left: 4px solid var(--degraded, #d9a400); border-radius: 8px; background: var(--card, var(--bg)); }
+.notice-bar form { margin: 0; }

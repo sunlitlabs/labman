@@ -194,7 +194,15 @@ Limits: one inventory file; LabMan creates groups for LabMan groups (named like 
 
 ## Semaphore
 
-Under **Admin > Semaphore** LabMan connects to your [Semaphore](https://semaphoreui.com) (paste any page of its web UI; the address is cut back to host and port) with an **API token** (stored encrypted, never shown) and can list projects and templates (playbooks), run a template, follow the run live and stop it. It never creates or edits Semaphore's own configuration (keys, inventories, templates, repositories).
+**Workbooks** (your Semaphore templates) have their own page, **Admin > Workbooks**, with the recent runs. Choose which machines a run aims at from your server list: groups (everything in a group, including machines added later) and individual servers, with a filter. On the **Servers** page, tick servers and use "Run a workbook on the selected servers", or use the **Run** link on a row; the run form opens with them already ticked, and you still review the run before it starts.
+
+**Host list.** Under **Admin > Semaphore** choose the Semaphore inventory that holds your machines (a static one, kept inside Semaphore; an inventory that points at a git file is handled by the Inventory page above). Then:
+
+- The Servers page shows, per server, the host name Semaphore knows it by, or "Not in Semaphore", and the run form flags servers Semaphore does not have.
+- An optional switch ("Update this inventory whenever my server list changes", off by default) writes your servers into that inventory after every change: new servers are added, address, user, port and group follow LabMan, and a deleted server's host is removed. Hosts that only exist in Semaphore are never removed. A static INI inventory becomes YAML the first time LabMan writes to it. A failed update is shown on the Semaphore page and as a notice. **Update Semaphore now** does the same on demand.
+- About every ten minutes LabMan reads the host list again. When hosts appear that LabMan does not have, every admin gets a dismissible notice; **Review them** lets you add each to your server list or ignore it.
+
+Under **Admin > Semaphore** LabMan connects to your [Semaphore](https://semaphoreui.com) (paste any page of its web UI; the address is cut back to host and port) with an **API token** (stored encrypted, never shown) and can list projects and templates (playbooks), run a template, follow the run live and stop it. It never creates or edits Semaphore's own configuration (keys, templates, repositories); the only thing it writes is the host list of the one inventory you choose, and only if you let it.
 
 Running is always three steps, in the UI and over MCP:
 

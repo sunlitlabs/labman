@@ -2,15 +2,11 @@
 
 @section('title', 'Semaphore')
 
-@php
-    $pill = fn ($status) => match ($status) { 'success' => 'up', 'error' => 'down', 'stopped' => 'degraded', default => 'unknown' };
-@endphp
-
 @section('admin')
     <h1>Semaphore</h1>
     <p class="muted">
-        Run your Ansible playbooks (Semaphore templates) from here. Every run is shown to you and needs an explicit
-        confirmation first. LabMan only starts, follows and stops runs; Semaphore's own setup is not changed.
+        The connection to Semaphore, and the host list it runs against. Your playbooks are on the
+        <a href="{{ route('workbooks.index') }}">Workbooks</a> page.
     </p>
 
     @if ($error)
@@ -30,67 +26,82 @@
                     <button class="btn-danger" type="submit" data-confirm>Disconnect</button>
                 </form>
             </div>
-
-            @if ($projects)
-                <form method="GET" action="{{ route('semaphore.index') }}" class="toolbar">
-                    <label for="project" class="muted">Project</label>
-                    <select id="project" name="project" class="inline-select">
-                        @foreach ($projects as $p)
-                            <option value="{{ $p['id'] }}" @selected($projectId === (int) $p['id'])>{{ $p['name'] }}</option>
-                        @endforeach
-                    </select>
-                    <button type="submit">Show</button>
-                </form>
-            @endif
         </div>
 
-        @if ($projectId)
-            <h2>Templates</h2>
-            @if ($templates)
-                <div class="rows">
-                    @foreach ($templates as $t)
-                        @php($last = $t['last_task'] ?? null)
-                        <div class="plan-item">
-                            <div class="plan-head">
-                                <div>
-                                    <strong>{{ $t['name'] }}</strong>
-                                    <span class="mono muted">{{ $t['playbook'] ?? '' }}</span>
-                                    @if (! empty($t['description'])) <div class="muted">{{ $t['description'] }}</div> @endif
-                                </div>
-                                <div class="actions">
-                                    @if ($last)
-                                        <a class="pill pill-{{ $pill($last['status'] ?? '') }}" href="{{ route('semaphore.task', [$projectId, $last['id']]) }}" title="Last run">{{ $last['status'] ?? '?' }}</a>
-                                    @endif
-                                    <a class="btn btn-primary" href="{{ route('semaphore.run', ['project' => $projectId, 'template' => $t['id']]) }}">Run…</a>
-                                </div>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
+        <form class="formcard" method="POST" action="{{ route('semaphore.inventory.save') }}">
+            @csrf
+            <h2>Host list</h2>
+            <p class="sub">
+                Semaphore runs playbooks against an inventory (its host list). Choose the one that holds your machines and LabMan will show which
+                of your servers are in it, let you aim runs at them, and tell you when new hosts appear there.
+            </p>
+
+            @php($usable = collect($choices)->where('usable', true))
+            @if ($choices === [])
+                <p class="muted">No inventories were found in Semaphore.</p>
             @else
-                <div class="card empty">This project has no templates.</div>
+                <div class="field">
+                    <label for="inventory">Inventory <span class="hint">static inventories only (kept inside Semaphore)</span></label>
+                    <select id="inventory" name="inventory" required>
+                        <option value="">— choose —</option>
+                        @foreach ($choices as $c)
+                            <option value="{{ $c['project'] }}:{{ $c['id'] }}" @selected($target && $target['project'] === $c['project'] && $target['inventory'] === $c['id']) @disabled(! $c['usable'])>
+                                {{ $c['project_name'] }} / {{ $c['name'] }} ({{ $c['type'] ?: 'unknown' }}{{ $c['usable'] ? '' : ', not supported' }})
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('inventory') <p class="warn">{{ $message }}</p> @enderror
+                </div>
+
+                <label class="check">
+                    <input type="checkbox" name="auto" value="1" @checked($target && $target['auto'])>
+                    <span>Update this inventory whenever my server list changes
+                        <span class="hint">New servers are added, and address, user, port and group follow LabMan. Hosts that only exist in Semaphore are never removed. An INI inventory becomes YAML the first time LabMan writes to it.</span></span>
+                </label>
+                <div class="savebar">
+                    <button class="primary" type="submit">Save</button>
+                    @if ($target)
+                        <button class="btn" type="submit" formaction="{{ route('semaphore.inventory.sync') }}" data-busy="Updating Semaphore…">Update Semaphore now</button>
+                    @endif
+                </div>
+            @endif
+        </form>
+
+        @if ($target)
+            <form method="POST" action="{{ route('semaphore.inventory.clear') }}" class="actions">
+                @csrf @method('DELETE')
+                <button class="btn" type="submit" data-confirm>Stop using this inventory</button>
+            </form>
+
+            @if ($last)
+                <div class="card sync-status" role="status">
+                    <h2>Last update of Semaphore <span class="pill pill-{{ $last['ok'] ? 'up' : 'down' }}">{{ $last['ok'] ? 'ok' : 'failed' }}</span></h2>
+                    <p class="muted">{{ \Illuminate\Support\Carbon::parse($last['at'])->diffForHumans() }}</p>
+                    @if ($last['ok'])
+                        <p>{{ $last['added'] }} host(s) added, {{ $last['updated'] }} updated, {{ $last['removed'] }} removed.</p>
+                    @else
+                        <p class="warn">{{ $last['message'] }}</p>
+                    @endif
+                </div>
             @endif
 
-            @if ($recent)
-                <h2>Recent runs</h2>
-                <div class="rows">
-                    @foreach ($recent as $r)
-                        <div class="plan-item">
-                            <div class="plan-head">
-                                <div>
-                                    <a href="{{ route('semaphore.task', [$projectId, $r['id']]) }}"><strong>#{{ $r['id'] }}</strong> {{ $r['tpl_alias'] ?? ('template '.($r['template_id'] ?? '?')) }}</a>
-                                    <span class="muted">{{ $r['message'] ?? '' }}</span>
-                                    <div class="muted">{{ $r['created'] ?? '' }}@if (! empty($r['limit'])) · limit {{ $r['limit'] }}@endif</div>
-                                </div>
-                                <span class="pill pill-{{ $pill($r['status'] ?? '') }}">{{ $r['status'] ?? '?' }}</span>
-                            </div>
-                        </div>
-                    @endforeach
+            @if ($known)
+                <div class="card">
+                    <h2>What Semaphore has</h2>
+                    <p class="muted">
+                        {{ count(array_filter($known['hosts'], fn ($h) => ! $h['pattern'])) }} host(s), looked at {{ \Illuminate\Support\Carbon::parse($known['at'])->diffForHumans() }}
+                        (LabMan looks again every ten minutes) · {{ $servers }} server(s) in LabMan.
+                    </p>
+                    @if ($strangers)
+                        <p><strong>{{ count($strangers) }}</strong> host(s) are in Semaphore but not in LabMan: <span class="mono">{{ implode(', ', array_slice(array_keys($strangers), 0, 8)) }}</span>.
+                            <a class="btn btn-primary" href="{{ route('semaphore.hosts') }}">Review them</a></p>
+                    @else
+                        <p>Every host in Semaphore is in your server list.</p>
+                    @endif
                 </div>
             @endif
         @endif
     @endif
-
     <form class="card" method="POST" action="{{ route('semaphore.connect') }}">
         @csrf
         <h2>{{ $connection ? 'Change connection' : 'Connect' }}</h2>

@@ -8,8 +8,8 @@
 @endphp
 
 @section('focus', '1')
-@section('crumb', 'Semaphore')
-@section('crumb_url', route('semaphore.index'))
+@section('crumb', 'Workbooks')
+@section('crumb_url', route('workbooks.index'))
 
 @section('admin')
     <div class="wide">
@@ -23,14 +23,21 @@
 
             <div class="card">
                 <h2>Where to run it</h2>
-                <p class="muted">Leave everything unticked to run on every host the template's inventory targets. Tick groups and servers to limit the run.</p>
+                <p class="muted">Leave everything unticked to run on every host the template's inventory targets. Tick groups and servers from your server list to limit the run.</p>
+
+                @if (count($targets['hosts']) > 8)
+                    <div class="field">
+                        <label for="target-filter">Find a server or group</label>
+                        <input id="target-filter" type="search" autocomplete="off" placeholder="Type to filter…" data-filter-targets>
+                    </div>
+                @endif
 
                 @if ($targets['groups'])
                     <div class="field">
-                        <label>Groups</label>
-                        <div class="pick">
+                        <label>Groups <span class="hint">a group runs on every machine in it, including ones added later</span></label>
+                        <div class="pick" data-target-list>
                             @foreach ($targets['groups'] as $g)
-                                <label class="check"><input type="checkbox" name="groups[]" value="{{ $g }}" @checked(in_array($g, $oldGroups, true))> <span class="mono">{{ $g }}</span></label>
+                                <label class="check" data-target-name="{{ strtolower($g['name']) }}"><input type="checkbox" name="groups[]" value="{{ $g['name'] }}" @checked(in_array($g['name'], $oldGroups, true))> <span class="mono">{{ $g['name'] }}</span>@if ($g['count']) <span class="muted">{{ $g['count'] }} server(s)</span>@endif</label>
                             @endforeach
                         </div>
                     </div>
@@ -38,15 +45,20 @@
 
                 @if ($targets['hosts'])
                     <div class="field">
-                        <label>Servers</label>
-                        <div class="pick">
+                        <label>Servers <span class="hint">individual machines</span></label>
+                        <div class="pick" data-target-list>
                             @foreach ($targets['hosts'] as $h)
-                                <label class="check"><input type="checkbox" name="hosts[]" value="{{ $h['name'] }}" @checked(in_array($h['name'], $oldHosts, true))> {{ $h['label'] }} @if ($h['label'] !== $h['name']) <span class="muted mono">{{ $h['name'] }}</span> @endif</label>
+                                <label class="check" data-target-name="{{ strtolower($h['label'].' '.$h['name'].' '.($h['group'] ?? '')) }}">
+                                    <input type="checkbox" name="hosts[]" value="{{ $h['name'] }}" @checked(in_array($h['name'], $oldHosts, true))>
+                                    {{ $h['label'] }}
+                                    @if ($h['label'] !== $h['name']) <span class="muted mono">{{ $h['name'] }}</span> @endif
+                                    @if ($h['group']) <span class="muted">{{ $h['group'] }}</span> @endif
+                                    @if ($h['missing']) <span class="pill pill-degraded" title="Not in the Semaphore inventory, so a run limited to it would match nothing">not in Semaphore</span> @endif
+                                </label>
                             @endforeach
                         </div>
                     </div>
                 @endif
-
                 <div class="field">
                     <label for="limit_extra">Other hosts or patterns <span class="hint">comma separated, e.g. web*,!web3</span></label>
                     <input id="limit_extra" name="limit_extra" type="text" maxlength="300" value="{{ $old['limit_extra'] ?? '' }}">
@@ -94,7 +106,7 @@
 
             <div class="savebar">
                 <button class="primary" type="submit">Review the run</button>
-                <a class="btn" href="{{ route('semaphore.index', ['project' => $project]) }}">Cancel</a>
+                <a class="btn" href="{{ route('workbooks.index', ['project' => $project]) }}">Cancel</a>
             </div>
         </form>
     </div>

@@ -50,6 +50,7 @@ final class Connection
     public static function forget(): void
     {
         Secrets::forget([self::URL, self::TOKEN, self::VERIFY]);
+        HostSync::forgetTarget();
     }
 
     /**

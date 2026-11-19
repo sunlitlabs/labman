@@ -5,6 +5,7 @@
 @section('body_attrs')data-status-url="{{ route('status') }}" data-interval="{{ \App\Support\Settings::interval() }}"@endsection
 
 @section('content')
+    @php($semOn = $semaphore !== null)
     <h1>Servers</h1>
     <p class="muted">Click a server to copy its SSH command.</p>
 
@@ -30,9 +31,14 @@
                                  data-filter="{{ strtolower(implode(' ', [$server->name, $server->domain, $server->address, $server->group, $server->notes])) }}">
                             @include('partials.health', ['item' => $server])
                             <div class="cell name withicon">
+                                @if ($semOn)<span class="rowpick"><input type="checkbox" form="bulk-run" name="hosts[]" value="{{ $semaphore['names'][$server->id] }}" data-pick-server aria-label="Select {{ $server->name }}"></span>@endif
                                 @include('partials.icon', ['model' => $server])
                                 <span class="nm">{{ $server->name }}</span>
                                 @if ($server->notes)<small>{{ $server->notes }}</small>@endif
+                                @if ($semOn && $semaphore['known'])
+                                    @if (isset($semaphore['pairs'][$server->id]))<small class="sem-tag" title="This server is in the Semaphore host list">Semaphore: <span class="mono">{{ $semaphore['pairs'][$server->id] }}</span></small>
+                                    @else<small class="sem-tag missing" title="Semaphore has no host for this server">Not in Semaphore</small>@endif
+                                @endif
                             </div>
                             @php($names = \App\Support\Domains::namesOf($server)['local'])
                             <div class="cell domain{{ $names ? '' : ' is-empty' }}">
@@ -45,6 +51,7 @@
                             @include('partials.detail', ['item' => $server])
                             <div class="cell actions">
                                 @can('admin')<a href="{{ route('servers.edit', $server) }}">Edit</a>@endcan
+                                @if ($semOn)<a href="{{ route('workbooks.index', ['hosts' => [$semaphore['names'][$server->id]]]) }}" title="Run a workbook on {{ $server->name }}">Run</a>@endif
                             </div>
                         </article>
                     @endforeach
@@ -52,5 +59,12 @@
             </section>
         @endforeach
         <p id="no-match" class="card empty" hidden>Nothing matches your filter.</p>
+
+        @if ($semOn)
+            <form id="bulk-run" method="GET" action="{{ route('workbooks.index') }}" class="bulkbar" data-bulk-run hidden>
+                <span data-bulk-count class="muted">0 selected</span>
+                <button class="primary" type="submit">Run a workbook on the selected servers</button>
+            </form>
+        @endif
     @endif
 @endsection

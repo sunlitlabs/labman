@@ -45,6 +45,12 @@ class MonitorCommand extends Command
                 report($e);
             }
 
+            try {
+                \App\Semaphore\HostSync::watch(); // looks at Semaphore's host list every ten minutes
+            } catch (Throwable $e) {
+                report($e);
+            }
+
             if ($this->option('once')) {
                 break;
             }

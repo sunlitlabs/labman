@@ -12,7 +12,7 @@ use App\Models\User;
 final class AdminNav
 {
     /** Route-name patterns that belong to the admin panel (the main nav highlights "Admin" on any of them). */
-    public const ROUTES = ['admin.*', 'settings.*', 'users.*', 'inventory.*', 'semaphore.*', 'npm.*', 'tokens.*'];
+    public const ROUTES = ['admin.*', 'settings.*', 'users.*', 'inventory.*', 'semaphore.*', 'workbooks.*', 'npm.*', 'tokens.*'];
 
     /**
      * @return list<array{title: string, items: list<array{label: string, route: string, match: list<string>, status: ?bool, badge: int, hint: string}>}>
@@ -35,7 +35,8 @@ final class AdminNav
         if ($admin) {
             $sections[] = ['title' => 'Integrations', 'items' => [
                 self::item('Inventory (Ansible)', 'inventory.index', ['inventory.*'], 'Keep servers and the inventory in git in sync', status: Secrets::plain('inventory.repo_url') !== null),
-                self::item('Semaphore', 'semaphore.index', ['semaphore.*'], 'Run playbooks', status: Secrets::plain('semaphore.url') !== null),
+                self::item('Workbooks', 'workbooks.index', ['workbooks.*'], 'Run Semaphore playbooks on your servers'),
+                self::item('Semaphore', 'semaphore.index', ['semaphore.*'], 'Connection and host list', status: Secrets::plain('semaphore.url') !== null),
                 self::item('Nginx Proxy Manager', 'npm.index', ['npm.*'], 'Import and push proxy hosts', status: Secrets::plain('npm.url') !== null),
             ]];
 

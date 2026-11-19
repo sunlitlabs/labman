@@ -18,6 +18,9 @@ final class FakeSemaphore
     /** @var array<int, array<string, mixed>> */
     public array $tasks = [];
 
+    /** @var array<int, array<string, mixed>> project 1's inventories by id */
+    public array $inventories = [];
+
     /** @var array<int, list<string>> */
     public array $output = [];
 
@@ -38,6 +41,16 @@ final class FakeSemaphore
                     ['name' => 'api_key', 'title' => 'API key', 'type' => 'secret', 'required' => false],
                 ]],
             ['id' => 8, 'name' => 'Deploy app', 'playbook' => 'playbooks/deploy.yml', 'description' => '', 'type' => 'deploy'],
+        ];
+        $fake->inventories = [
+            3 => ['id' => 3, 'project_id' => 1, 'name' => 'Static hosts', 'type' => 'static-yaml', 'ssh_key_id' => 1, 'become_key_id' => null, 'inventory' => "all:
+  hosts:
+    web1:
+      ansible_host: 192.0.2.11
+    stranger:
+      ansible_host: 192.0.2.99
+"],
+            4 => ['id' => 4, 'project_id' => 1, 'name' => 'From git', 'type' => 'file', 'ssh_key_id' => 1, 'inventory' => 'inventory/hosts.yml'],
         ];
         Http::fake(fn (Request $request) => $fake->handle($request));
 
@@ -74,6 +87,9 @@ final class FakeSemaphore
             $path === '/api/info' => Http::response(['version' => 'v2.12.0']),
             $path === '/api/projects' => Http::response([['id' => 1, 'name' => 'Home Lab'], ['id' => 2, 'name' => 'Other']]),
             (bool) preg_match('#^/api/project/(\d+)/#', $path, $m) && (int) $m[1] !== 1 && (int) $m[1] !== 2 => Http::response(['error' => 'not found'], 404),
+            $path === '/api/project/2/inventory' => Http::response([]),
+            $path === '/api/project/1/inventory' => Http::response(array_values($this->inventories)),
+            (bool) preg_match('#^/api/project/1/inventory/(\d+)$#', $path, $m) && $method === 'PUT' => $this->saveInventory((int) $m[1], $body),
             $path === '/api/project/1/templates' => Http::response($this->templates),
             $path === '/api/project/1/tasks/last' => Http::response(array_values(array_reverse($this->tasks))),
             $path === '/api/project/1/tasks' && $method === 'POST' => $this->start($body),
@@ -84,6 +100,17 @@ final class FakeSemaphore
             (bool) preg_match('#^/api/project/1/tasks/(\d+)/stop$#', $path, $m) && $method === 'POST' => $this->stop((int) $m[1]),
             default => Http::response(['error' => 'not found'], 404),
         };
+    }
+
+    /** @param array<string, mixed> $body */
+    private function saveInventory(int $id, array $body)
+    {
+        if (! isset($this->inventories[$id])) {
+            return Http::response(['error' => 'not found'], 404);
+        }
+        $this->inventories[$id] = $body + $this->inventories[$id];
+
+        return Http::response('', 204);
     }
 
     /** @param array<string, mixed> $body */

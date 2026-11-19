@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\Server;
 use App\Models\User;
 use App\Support\Access;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -27,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
 
         // May this viewer open the admin panel at all (admins, or anyone allowed to see Settings or Users)?
         Gate::define('view-admin', fn (?User $user) => \App\Support\AdminNav::canEnter($user));
+
+        // Keep Semaphore's host list up to date with the server list (when switched on in the Semaphore settings).
+        Server::saved(fn (Server $s) => \App\Semaphore\HostSync::queue());
+        Server::deleted(fn (Server $s) => \App\Semaphore\HostSync::queue($s->inventory_host));
 
         // Editing anything is admin-only.
         Gate::define('admin', fn (?User $user) => Access::isAdmin($user));

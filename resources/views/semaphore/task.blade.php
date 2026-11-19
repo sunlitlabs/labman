@@ -10,8 +10,8 @@
 @section('body_attrs')data-task-url="{{ route('semaphore.task.status', [$project, $taskId]) }}" data-task-total="{{ count($output) }}" data-task-finished="{{ $finished ? '1' : '0' }}"@endsection
 
 @section('focus', '1')
-@section('crumb', 'Semaphore')
-@section('crumb_url', route('semaphore.index'))
+@section('crumb', 'Workbooks')
+@section('crumb_url', route('workbooks.index'))
 
 @section('admin')
     <div class="toolbar">
@@ -23,7 +23,7 @@
                 <button class="btn-danger" type="submit" data-confirm>Stop</button>
             </form>
         @endunless
-        <a class="btn" href="{{ route('semaphore.index', ['project' => $project]) }}">Back to templates</a>
+        <a class="btn" href="{{ route('workbooks.index', ['project' => $project]) }}">Back to workbooks</a>
     </div>
     <p class="muted">
         @if (! empty($task['created'])) Started {{ $task['created'] }}. @endif
