@@ -30,6 +30,7 @@ return [
         'ssh_user' => '',
         'ssh_target' => 'address',
         'registration_mode' => 'approval',
+        'icons' => '1',
         'visibility.services' => 'users',
         'visibility.servers' => 'users',
         'visibility.settings' => 'admins',
@@ -53,6 +54,15 @@ return [
         'allow_local' => (bool) env('LABMAN_GIT_ALLOW_LOCAL', false),
         'timeout' => 90,
         'askpass' => base_path('docker/git-askpass.sh'),
+    ],
+
+    /*
+    | Icons are downloaded once from the public Dashboard Icons library via jsDelivr and cached on disk.
+    | LABMAN_ICONS_FETCH=false stops every download (cached icons are still shown); the Settings page has a switch too.
+    */
+    'icons' => [
+        'fetch' => (bool) env('LABMAN_ICONS_FETCH', true),
+        'path' => storage_path('app/icons'),
     ],
 
     'limits' => [

@@ -13,6 +13,9 @@ use Illuminate\Validation\Rule;
  */
 final class ServerInput
 {
+    /** Switches where an absent value means "leave as is" (forms always send them), never "off". */
+    private const FLAGS = ['monitor' => true, 'check_ssh' => true];
+
     /** Normalise raw input: "445, 8080" becomes a list, a missing SSH port becomes 22. */
     public static function prepare(array $in): array
     {
@@ -23,6 +26,12 @@ final class ServerInput
 
         if (! isset($in['ssh_port']) || $in['ssh_port'] === '') {
             $in['ssh_port'] = 22;
+        }
+
+        foreach (array_keys(self::FLAGS) as $flag) {
+            if (array_key_exists($flag, $in)) {
+                $in[$flag] = filter_var($in[$flag], FILTER_VALIDATE_BOOLEAN);
+            }
         }
 
         return $in;
@@ -41,6 +50,9 @@ final class ServerInput
             'ssh_user' => ['nullable', 'string', 'max:32', Check::sshUser()],
             'ssh_port' => ['required', 'integer', 'between:1,65535'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'monitor' => ['boolean'],
+            'check_ssh' => ['boolean'],
+            'icon' => ['nullable', 'string', 'max:80', Check::icon()],
         ];
     }
 
@@ -48,6 +60,7 @@ final class ServerInput
     public static function payload(array $validated): array
     {
         $validated['ports'] = array_values(array_unique(array_map('intval', $validated['ports'] ?? [])));
+        $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
 
         return $validated;
     }
@@ -59,7 +72,8 @@ final class ServerInput
      */
     public static function validate(array $input, ?Server $existing = null): array
     {
-        $data = self::prepare($existing ? array_merge(self::current($existing), $input) : $input);
+        $base = $existing ? self::current($existing) : self::FLAGS;
+        $data = self::prepare(array_merge($base, $input));
 
         return self::payload(Validator::make($data, self::rules($existing))->validate());
     }
@@ -76,6 +90,9 @@ final class ServerInput
             'ssh_user' => $server->ssh_user,
             'ssh_port' => $server->ssh_port,
             'notes' => $server->notes,
+            'monitor' => $server->monitor,
+            'check_ssh' => $server->check_ssh,
+            'icon' => $server->icon,
         ];
     }
 }

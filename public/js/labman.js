@@ -55,7 +55,7 @@
   }
 
   document.addEventListener('click', function (e) {
-    var row = e.target.closest('.row.clickable');
+    var row = e.target.closest('.clickable');
     if (!row || e.target.closest('a, button, input, select, textarea')) return;
 
     if (row.hasAttribute('data-ssh')) {
@@ -72,10 +72,11 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    var row = e.target.closest && e.target.closest('.row[data-ssh]');
+    var row = e.target.closest && e.target.closest('.clickable[data-ssh], .clickable[data-href]');
     if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
-      copyRow(row);
+      if (row.hasAttribute('data-ssh')) copyRow(row);
+      else window.open(row.getAttribute('data-href'), '_blank', 'noopener,noreferrer');
     }
   });
 
@@ -90,7 +91,7 @@
 
     document.querySelectorAll('.group').forEach(function (group) {
       var visible = 0;
-      group.querySelectorAll('.row[data-filter]').forEach(function (row) {
+      group.querySelectorAll('[data-filter]').forEach(function (row) {
         var hay = row.getAttribute('data-filter');
         var match = tokens.every(function (t) { return hay.indexOf(t) !== -1; });
         row.hidden = !match;
@@ -124,6 +125,31 @@
     filter.select();
   });
 
+  // ------------------------------------------------- icon name suggestions
+  var iconInput = document.getElementById('icon');
+  var iconList = document.getElementById('icon-list');
+  if (iconInput && iconList && iconInput.getAttribute('data-suggest-url')) {
+    var iconTimer = null;
+    iconInput.addEventListener('input', function () {
+      clearTimeout(iconTimer);
+      var q = iconInput.value.trim();
+      if (q.length < 2) return;
+      iconTimer = setTimeout(function () {
+        fetch(iconInput.getAttribute('data-suggest-url') + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : { icons: [] }; })
+          .then(function (data) {
+            iconList.textContent = '';
+            (data.icons || []).forEach(function (name) {
+              var o = document.createElement('option');
+              o.value = name;
+              iconList.appendChild(o);
+            });
+          })
+          .catch(function () {});
+      }, 200);
+    });
+  }
+
   // ---------------------------------------------------------- live status
   var url = body.getAttribute('data-status-url');
   var interval = Math.max(5, parseFloat(body.getAttribute('data-interval')) || 30);
@@ -136,10 +162,10 @@
     return n;
   }
 
-  function renderChecks(container, checks) {
+  function renderChecks(container, checks, state) {
     container.textContent = '';
     if (!checks || !checks.length) {
-      container.appendChild(el('span', 'chk', 'Waiting for the first check…'));
+      container.appendChild(el('span', 'chk', state === 'off' ? 'Not monitored: no checks are run.' : 'Waiting for the first check…'));
       return;
     }
     checks.forEach(function (c) {
@@ -150,16 +176,25 @@
   }
 
   function applyItem(kind, item) {
-    var row = document.querySelector('.row[data-kind="' + kind + '"][data-id="' + item.id + '"]');
+    var row = document.querySelector('[data-kind="' + kind + '"][data-id="' + item.id + '"]');
     if (!row) return;
+    row.setAttribute('data-state', item.state);
     var pill = row.querySelector('[data-pill]');
     if (pill) {
-      pill.className = 'pill pill-' + item.state + (item.stale ? ' is-stale' : '');
-      pill.textContent = item.stale ? item.state + ' (stale)' : item.state;
+      var stale = item.stale && item.state !== 'off';
+      var label = item.state === 'off' ? 'not monitored' : item.state;
+      pill.className = 'pill pill-' + item.state + (stale ? ' is-stale' : '');
+      pill.textContent = stale ? label + ' (stale)' : label;
       pill.title = item.checked_at ? 'Checked ' + new Date(item.checked_at).toLocaleString() : 'Not checked yet';
     }
     var detail = row.querySelector('[data-detail]');
-    if (detail) renderChecks(detail, item.checks);
+    if (detail && row.classList.contains('tile')) {
+      // Dashboard tiles show only the first thing that is wrong.
+      var bad = (item.checks || []).filter(function (c) { return !c.ok; })[0];
+      detail.textContent = bad ? bad.label + ' · ' + bad.detail : '';
+    } else if (detail) {
+      renderChecks(detail, item.checks, item.state);
+    }
   }
 
   function applySummary(kind, counts) {
@@ -167,7 +202,39 @@
       var n = document.querySelector('[data-count="' + kind + ':' + state + '"]');
       if (n) n.textContent = counts[state];
     });
+    updateHero();
   }
+
+  // The dashboard headline follows the counters the live update keeps current.
+  function updateHero() {
+    var hero = document.getElementById('hero');
+    if (!hero) return;
+    var totals = { up: 0, degraded: 0, down: 0, unknown: 0 };
+    document.querySelectorAll('[data-count]').forEach(function (n) {
+      var state = n.getAttribute('data-count').split(':')[1];
+      if (state in totals) totals[state] += parseInt(n.textContent, 10) || 0;
+    });
+    Object.keys(totals).forEach(function (state) {
+      var t = document.querySelector('[data-total="' + state + '"]');
+      if (t) t.textContent = totals[state];
+    });
+    var trouble = totals.down + totals.degraded;
+    var watched = totals.up + totals.degraded + totals.down + totals.unknown;
+    var headline = document.getElementById('headline');
+    if (headline) {
+      headline.textContent = watched === 0 ? 'Nothing is being monitored yet'
+        : trouble === 0 ? 'All systems operational'
+        : trouble === 1 ? '1 item needs attention' : trouble + ' items need attention';
+    }
+    var tone = (watched === 0 || totals.unknown === watched) ? 'unknown' : totals.down > 0 ? 'down' : totals.degraded > 0 ? 'degraded' : 'up';
+    hero.className = 'hero hero-' + tone;
+  }
+
+  // An icon that fails to load (not in the library) leaves the letter avatar showing.
+  document.addEventListener('error', function (e) {
+    var img = e.target;
+    if (img && img.classList && img.classList.contains('ico-img')) img.hidden = true;
+  }, true);
 
   function tick() {
     if (!url) return;

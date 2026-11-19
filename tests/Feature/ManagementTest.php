@@ -216,7 +216,7 @@ class ManagementTest extends TestCase
 
         $service = Service::firstOrFail();
         $this->assertSame('/', $service->path);
-        $this->assertSame('200-399', $service->expect);
+        $this->assertSame('200-499', $service->expect);
     }
 
     public function test_services_page_renders_open_links(): void

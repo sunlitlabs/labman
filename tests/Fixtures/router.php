@@ -9,6 +9,10 @@ switch ($path) {
         http_response_code(200);
         echo 'ok';
         break;
+    case '/health':
+        http_response_code(200);
+        echo '{"status":"ok"}';
+        break;
     case '/created':
         http_response_code(201);
         break;
@@ -26,6 +30,10 @@ switch ($path) {
         break;
     case '/error':
         http_response_code(500);
+        break;
+    case '/vhost':
+        // A name-based proxy: only the right Host header gets the site.
+        http_response_code(str_starts_with($_SERVER['HTTP_HOST'] ?? '', 'vhost.example.com') ? 200 : 421);
         break;
     case '/slow':
         sleep(8);

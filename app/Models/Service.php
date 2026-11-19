@@ -13,6 +13,14 @@ class Service extends Model
     protected $fillable = [
         'name', 'domain', 'server_id', 'address', 'port', 'scheme', 'path', 'group',
         'expect', 'verify_tls', 'public_check', 'websockets', 'notes', 'npm_host_id',
+        'health_path', 'monitor', 'check_tcp', 'icon',
+    ];
+
+    /** Defaults for new models (the database defaults are older than the current ones). */
+    protected $attributes = [
+        'expect' => ExpectRange::DEFAULT,
+        'monitor' => true,
+        'check_tcp' => true,
     ];
 
     protected function casts(): array
@@ -22,6 +30,8 @@ class Service extends Model
             'verify_tls' => 'boolean',
             'public_check' => 'boolean',
             'websockets' => 'boolean',
+            'monitor' => 'boolean',
+            'check_tcp' => 'boolean',
             'checks' => 'array',
             'checked_at' => 'datetime',
         ];
@@ -64,6 +74,12 @@ class Service extends Model
     public function openUrl(): ?string
     {
         return $this->publicUrl() ?? $this->backendUrl();
+    }
+
+    /** The path the health check requests: the dedicated health path if there is one, else the service path. */
+    public function healthPath(): string
+    {
+        return $this->health_path ?: $this->path;
     }
 
     public function expectRange(): ExpectRange

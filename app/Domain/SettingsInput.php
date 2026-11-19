@@ -22,6 +22,7 @@ final class SettingsInput
             'ssh_user' => ['nullable', 'string', 'max:32', Check::sshUser()],
             'ssh_target' => ['required', Rule::in(['address', 'domain'])],
             'registration_mode' => ['required', Rule::in(config('labman.registration_modes'))],
+            'icons' => ['boolean'],
         ];
 
         foreach (config('labman.screens') as $screen) {
@@ -40,6 +41,7 @@ final class SettingsInput
         foreach (['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target', 'registration_mode'] as $key) {
             $out[$key] = $all[$key];
         }
+        $out['icons'] = Settings::icons();
         foreach (config('labman.screens') as $screen) {
             $out['visibility'][$screen] = $all['visibility.'.$screen];
         }
@@ -60,6 +62,9 @@ final class SettingsInput
     {
         $values = collect($validated)->except('visibility')->all();
         $values['ssh_user'] = $values['ssh_user'] ?? '';
+        if (array_key_exists('icons', $values)) {
+            $values['icons'] = filter_var($values['icons'], FILTER_VALIDATE_BOOLEAN) ? '1' : '0';
+        }
 
         foreach ($validated['visibility'] as $screen => $level) {
             $values["visibility.{$screen}"] = $level;

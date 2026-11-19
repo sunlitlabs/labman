@@ -217,6 +217,42 @@ class McpTest extends TestCase
         }
     }
 
+    public function test_health_options_and_icons_can_be_set_and_read_back(): void
+    {
+        $service = $this->ok('create_service', [
+            'name' => 'Wiki', 'address' => '192.0.2.5', 'health_path' => '/health', 'monitor' => false, 'check_tcp' => false, 'icon' => 'Wikijs', 'expect' => '200-399,401',
+        ])['service'];
+
+        $this->assertSame('/health', $service['health_path']);
+        $this->assertFalse($service['monitor']);
+        $this->assertFalse($service['check_tcp']);
+        $this->assertSame('wikijs', $service['icon']);
+        $this->assertSame('off', $service['state']);
+        $this->assertSame('200-399,401', $service['expect']);
+
+        // Omitted flags keep their value on update.
+        $this->assertFalse($this->ok('update_service', ['name' => 'Wiki', 'notes' => 'x'])['service']['monitor']);
+        $this->assertTrue($this->ok('update_service', ['name' => 'Wiki', 'monitor' => true])['service']['monitor']);
+
+        $server = $this->ok('create_server', ['name' => 'nas', 'address' => '192.0.2.9', 'monitor' => false, 'check_ssh' => false, 'icon' => 'proxmox'])['server'];
+        $this->assertFalse($server['monitor']);
+        $this->assertFalse($server['check_ssh']);
+        $this->assertSame('off', $server['state']);
+
+        $this->assertStringContainsString('health path', $this->fails('create_service', ['name' => 'Bad', 'address' => '192.0.2.6', 'health_path' => 'nope']));
+    }
+
+    public function test_diagnose_service_explains_and_changes_nothing_by_default(): void
+    {
+        $this->ok('create_service', ['name' => 'Dead', 'address' => '127.0.0.1', 'port' => 1]);
+
+        $result = $this->ok('diagnose_service', ['name' => 'Dead']);
+
+        $this->assertSame('Dead', $result['service']);
+        $this->assertSame('refused', $result['diagnosis']['kind']);
+        $this->assertArrayNotHasKey('applied', $result['diagnosis']);
+    }
+
     public function test_tokens_cannot_manage_tokens(): void
     {
         $names = array_column($this->rpc('tools/list', [], $this->adminToken)->json('result.tools'), 'name');

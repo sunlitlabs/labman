@@ -1,9 +1,12 @@
 # LabMan
 
-A self-hostable **heads-up display for a home lab**. Two pages, one glance:
+A self-hostable **heads-up display for a home lab**. A dashboard to land on, two lists behind it:
 
+- **Dashboard** (the home page): an overall "all systems operational / 2 items need attention" banner and a tile per service and server, each with an icon matched from its name. Click a service tile to open it, a server tile to copy its SSH command. Updates live.
 - **Services**: name, domain, backend address and live health. Click one to open it (public URL, else backend URL).
 - **Servers**: name, domain, address and live health. Click one to **copy its SSH command** (`ssh admin@192.0.2.5`).
+
+**Icons** come from the public [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) library (Apache-2.0; the logos belong to their respective owners). Nothing is bundled: LabMan matches the service or server name to an icon (or you type an icon name), downloads it once through its own server and caches it, so your browser never contacts anyone else. A letter avatar shows when there is no match. Switch icons off under Settings > General, set `LABMAN_ICONS_FETCH=false` to stop all downloads, or give one item `icon: none`.
 
 Plus a filter box (press `/`), a status summary, light/dark theme that follows your OS, and a layout that works down to phone width. Laravel 12, plain Blade, no JavaScript framework, no build step.
 
@@ -115,7 +118,11 @@ services:
     scheme: http         # http | https
     path: /              # must start with /
     group: Apps
-    expect: 200-399      # healthy status range: 200, 200-499, 401 ...
+    expect: 200-499      # healthy statuses: 200, 200-399,401 ... (default 200-499)
+    health_path: /health # optional: request this instead of path for the health check
+    icon: wikijs         # optional icon name; omit to guess from the name, "none" for no icon
+    monitor: true        # false hides the status ("not monitored")
+    check_tcp: true      # an open port counts as up even if the web check fails
     verify_tls: true     # applies to the public (domain) check only
     public_check: true
     websockets: false    # informational for now
@@ -200,10 +207,15 @@ The Semaphore token acts as its Semaphore user, so use a dedicated user that can
 
 Checks run in the background, never when a page loads. `php artisan labman:monitor` is a resident loop started by the container entrypoint (and restarted if it exits); it re-reads the settings every round, so changing the interval needs no restart. Results are stored in the database; the pages render what is stored and the browser polls a small JSON endpoint (`/status`) every interval.
 
-- **Server**: a TCP connect to the SSH port (default 22) plus each extra port. `up` = all connect, `degraded` = some, `down` = none, `unknown` = not checked yet.
-- **Service**: an HTTP(S) GET to `scheme://address:port/path` (address = the linked server's address, or the service's own). Backend TLS is **not** verified and redirects are **not** followed, so a 301/302 counts as "it answered". Healthy means the status is inside `expect` (default `200-399`). If the service has a domain and `public_check` is on, a second GET goes to `https://<domain><path>` **with** certificate verification (unless `verify_tls: false`).
-  - `down` if the backend fails, `degraded` if the backend is fine but the public check fails, otherwise `up`. A service with no address is `down` ("no address").
-- Each check records a label (`backend`, `public`, `ssh :22`, `tcp :445`), pass/fail, milliseconds and a detail such as `HTTP 200`, `HTTP 500 (expected 200-399)`, `timed out`, `connection refused`, `certificate: ...`.
+- **Server**: a TCP connect to the SSH port (default 22, switch off with `check_ssh: false`) plus each extra port. `up` = all connect, `degraded` = some, `down` = none, `unknown` = not checked yet.
+- **Service**: it is **up when any check passes**:
+  - the web check: an HTTP(S) GET to `scheme://address:port/health_path` (`health_path` falls back to `path`), healthy when the status is inside `expect` (default `200-499`, i.e. anything but a server error: login pages answering 401 and API-only apps answering 404 on `/` are running). `expect` takes a list, e.g. `200-399,401`. Backend TLS is **not** verified and redirects are **not** followed. For a service with a domain the request is also sent with `Host: <domain>`, which is what name-based reverse proxies and apps such as Nextcloud need;
+  - an **open backend port** (`check_tcp`, on by default): an app that answers oddly but is plainly listening counts as up;
+  - the **public address** (`public_check`, `https://<domain><path>` with certificate verification unless `verify_tls: false`): if LabMan cannot reach the backend (another VLAN, a firewall) but the public name answers, the service is up.
+  - `degraded` only when the backend is up but the public check fails (proxy or DNS broken); `down` only when nothing passes. A service with no address is `down` ("no address").
+- **Hide a status you cannot get right**: untick *Monitor* on a service or server (`monitor: false`). It stays listed as "not monitored", costs no checks and is not counted in the totals.
+- **Diagnose** (admin, on a service's edit page, or the `diagnose_service` MCP tool) probes one service several ways at once: the port, http and https, with and without the domain as `Host`, a set of likely health paths (plus the known one for common apps such as Jellyfin, Plex, Sonarr, Grafana, Home Assistant, Proxmox), and the other common web ports on the same address. It then says what is wrong ("connection refused: nothing is listening on that port", "timed out: usually a firewall or VLAN rule", "answers on :8443 over https") and offers settings that would make the check pass; nothing changes until you press Apply.
+- Each check records a label (`backend`, `public`, `ssh :22`, `tcp :445`), pass/fail, milliseconds and a detail such as `HTTP 200`, `HTTP 500 (expected 200-499)`, `timed out`, `connection refused`, `certificate: ...`.
 - All checks in a round run concurrently (non-blocking sockets with `stream_select` for TCP, Laravel's `Http::pool` for HTTP), each bounded by the timeout, so a dead or slow host costs one timeout for the whole round, not one per host. A failing round is logged and the loop carries on.
 - Limitation: if a host is given by *name*, the DNS lookup happens before the timeout applies and is bounded by your resolver.
 - Stored results older than three intervals (minimum 60 s) are shown as `(stale)`, so a stopped monitor is visible.
@@ -217,6 +229,7 @@ Three kinds of visitor: **guest**, **user**, **admin**. For each of the four scr
 - **Editing is always admin-only**, whatever a screen's visibility. A non-admin who may see Settings or Users gets a read-only page.
 - Admins can create and disable users, change roles, approve pending accounts and reset passwords. An admin cannot demote or disable themselves, nor the last active administrator. Disabled users are signed out on their next request.
 - Registration modes: **off**, **open**, **open with admin approval** (the default; pending accounts cannot sign in).
+- **Passwords** may contain any characters (symbols, spaces, unicode) up to 255 characters and are never trimmed or altered, so a password-manager-generated password works. They are hashed with **argon2id** (bcrypt silently ignores everything past 72 bytes); accounts created with an older bcrypt hash keep working and are upgraded the next time they sign in.
 
 ## Security notes
 

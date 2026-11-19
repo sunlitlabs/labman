@@ -52,6 +52,16 @@ final class Check
         };
     }
 
+    /** An icon name from the icon library (jellyfin, home-assistant), or "none" to switch the icon off. */
+    public static function icon(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) {
+            if (! is_string($value) || ! preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/', $value)) {
+                $fail('The :attribute must be an icon name such as jellyfin or home-assistant (letters, digits, - . _), or none.');
+            }
+        };
+    }
+
     public static function expect(): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail) {

@@ -18,7 +18,7 @@ class ServiceRequest extends FormRequest
     {
         $prepared = ServiceInput::prepare($this->all(), form: true);
 
-        $this->merge(array_intersect_key($prepared, array_flip(['path', 'expect', 'verify_tls', 'public_check', 'websockets'])));
+        $this->merge(array_intersect_key($prepared, array_flip(['path', 'expect', 'verify_tls', 'public_check', 'websockets', 'monitor', 'check_tcp'])));
     }
 
     public function rules(): array

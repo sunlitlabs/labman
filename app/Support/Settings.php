@@ -70,6 +70,12 @@ final class Settings
         return (string) self::get('title', 'LabMan');
     }
 
+    /** Whether service/server icons are shown (they are fetched once from a public icon library and cached). */
+    public static function icons(): bool
+    {
+        return self::get('icons') !== '0';
+    }
+
     public static function interval(): float|int
     {
         return max((float) config('labman.limits.check_interval_min'), (float) self::get('check_interval')) + 0;

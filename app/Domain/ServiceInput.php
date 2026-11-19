@@ -14,6 +14,9 @@ final class ServiceInput
 {
     private const FLAGS = ['verify_tls' => true, 'public_check' => true, 'websockets' => false];
 
+    /** Newer switches: an absent value means "leave as is" (forms always send them), never "off". */
+    private const OPTIONAL_FLAGS = ['monitor' => true, 'check_tcp' => true];
+
     /**
      * Normalise raw input. With $form, an absent checkbox means "off"; otherwise
      * absent flags are left for the caller's defaults.
@@ -32,6 +35,12 @@ final class ServiceInput
                 $in[$flag] = filter_var($in[$flag], FILTER_VALIDATE_BOOLEAN);
             } elseif ($form) {
                 $in[$flag] = false;
+            }
+        }
+
+        foreach (array_keys(self::OPTIONAL_FLAGS) as $flag) {
+            if (array_key_exists($flag, $in)) {
+                $in[$flag] = filter_var($in[$flag], FILTER_VALIDATE_BOOLEAN);
             }
         }
 
@@ -55,6 +64,10 @@ final class ServiceInput
             'public_check' => ['boolean'],
             'websockets' => ['boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'health_path' => ['nullable', 'string', 'max:500', Check::path()],
+            'monitor' => ['boolean'],
+            'check_tcp' => ['boolean'],
+            'icon' => ['nullable', 'string', 'max:80', Check::icon()],
         ];
     }
 
@@ -75,6 +88,8 @@ final class ServiceInput
         $validated['expect'] = (string) ExpectRange::parse($validated['expect']);
         $validated['server_id'] = filled($validated['server_id'] ?? null) ? (int) $validated['server_id'] : null;
         $validated['address'] = $validated['server_id'] ? null : ($validated['address'] ?? null);
+        $validated['health_path'] = filled($validated['health_path'] ?? null) ? $validated['health_path'] : null;
+        $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
 
         return $validated;
     }
@@ -87,7 +102,7 @@ final class ServiceInput
      */
     public static function validate(array $input, ?Service $existing = null): array
     {
-        $base = $existing ? self::current($existing) : ['scheme' => 'http'] + self::FLAGS;
+        $base = $existing ? self::current($existing) : ['scheme' => 'http'] + self::FLAGS + self::OPTIONAL_FLAGS;
 
         if (filled($input['server_id'] ?? null) && ! array_key_exists('address', $input)) {
             $base['address'] = null;
@@ -121,6 +136,10 @@ final class ServiceInput
             'public_check' => $service->public_check,
             'websockets' => $service->websockets,
             'notes' => $service->notes,
+            'health_path' => $service->health_path,
+            'monitor' => $service->monitor,
+            'check_tcp' => $service->check_tcp,
+            'icon' => $service->icon,
         ];
     }
 }

@@ -38,13 +38,28 @@
             </div>
 
             <div class="field">
-                <label for="ports">Extra TCP ports to check <span class="hint">comma or space separated; SSH is always checked</span></label>
+                <label for="ports">Extra TCP ports to check <span class="hint">comma or space separated; SSH is checked too unless switched off below</span></label>
                 <input id="ports" name="ports" type="text" placeholder="445, 8080" value="{{ old('ports', is_array(old('ports')) ? implode(', ', old('ports')) : implode(', ', $server->ports ?? [])) }}">
             </div>
             <div class="field">
                 <label for="notes">Notes <span class="hint">(optional)</span></label>
                 <input id="notes" name="notes" type="text" maxlength="500" value="{{ old('notes', $server->notes) }}">
             </div>
+            <div class="field">
+                <label for="icon">Icon <span class="hint">(optional, e.g. proxmox; blank = guess from the name, none = no icon)</span></label>
+                <input id="icon" name="icon" type="text" maxlength="80" autocomplete="off" list="icon-list" data-suggest-url="{{ route('icons.search') }}" value="{{ old('icon', $server->icon) }}">
+                <datalist id="icon-list"></datalist>
+                @if ($server->exists && ! $server->icon && ($auto = \App\Icons\Icons::slugFor($server)))
+                    <small class="hint">Currently matched from the name: {{ $auto }}</small>
+                @endif
+            </div>
+            @foreach (['monitor' => 'Monitor this server (untick to hide its status: "not monitored")', 'check_ssh' => 'Count the SSH port as a health check'] as $flag => $text)
+                <label class="check">
+                    <input type="hidden" name="{{ $flag }}" value="0">
+                    <input type="checkbox" name="{{ $flag }}" value="1" @checked((bool) old($flag, $server->{$flag}))>
+                    {{ $text }}
+                </label>
+            @endforeach
 
             <div class="actions">
                 <button class="primary" type="submit">Save</button>

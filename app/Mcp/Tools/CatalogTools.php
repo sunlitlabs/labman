@@ -15,6 +15,7 @@ use App\Mcp\ToolException;
 use App\Models\Server;
 use App\Models\Service;
 use App\Models\User;
+use App\Monitoring\Diagnoser;
 use App\Monitoring\HealthChecker;
 use App\Monitoring\StatusView;
 
@@ -41,6 +42,9 @@ final class CatalogTools
             'ssh_user' => Tool::str('SSH user for Copy SSH (overrides the default).'),
             'ssh_port' => Tool::int('SSH port, default 22.'),
             'notes' => Tool::str('Free text, max 500 characters.'),
+            'monitor' => Tool::bool('Health-check this server (default true). False hides its status ("not monitored").'),
+            'check_ssh' => Tool::bool('Count the SSH port as a health check (default true).'),
+            'icon' => Tool::str('Icon name from the icon library, e.g. proxmox. Empty for none.'),
         ];
 
         $service = [
@@ -52,7 +56,11 @@ final class CatalogTools
             'scheme' => Tool::str('Backend scheme.', ['http', 'https']),
             'path' => Tool::str('URL path, must start with /. Default /.'),
             'group' => Tool::str('Optional group heading.'),
-            'expect' => Tool::str('Healthy HTTP status or range, e.g. 200, 401 or 200-399 (default).'),
+            'expect' => Tool::str('Healthy HTTP statuses: a number, a range, or a comma list, e.g. 200, 401 or 200-399,401. Default 200-499 (any answer except a server error).'),
+            'health_path' => Tool::str('Path to request for the health check if different from `path` (e.g. /health). Must start with /.'),
+            'monitor' => Tool::bool('Health-check this service (default true). False hides its status ("not monitored").'),
+            'check_tcp' => Tool::bool('An open backend port counts as up even if the web check fails (default true).'),
+            'icon' => Tool::str('Icon name from the icon library, e.g. jellyfin. Empty for none.'),
             'verify_tls' => Tool::bool('Verify the certificate of the public check (default true).'),
             'public_check' => Tool::bool('Also check https://<domain><path> (default true).'),
             'websockets' => Tool::bool('Informational flag.'),
@@ -85,7 +93,7 @@ final class CatalogTools
         return [
             // ------------------------------------------------------------------ read
             new Tool('list_services', 'List services', 'List all services with their stored health (state, per-check details, URLs). Optional filters.',
-                ['group' => Tool::str('Only this group.'), 'state' => Tool::str('Only this state.', ['up', 'degraded', 'down', 'unknown'])],
+                ['group' => Tool::str('Only this group.'), 'state' => Tool::str('Only this state.', ['up', 'degraded', 'down', 'unknown', 'off'])],
                 [], 'read', true, false, function (array $a) {
                     $rows = Service::query()->with('server')->orderBy('group')->orderBy('name')->get()->map(fn ($s) => Present::service($s));
                     $rows = $rows->when($a['group'] ?? null, fn ($c, $g) => $c->where('group', $g))
@@ -130,6 +138,21 @@ final class CatalogTools
                     $summary = app(HealthChecker::class)->run();
 
                     return $summary + ['servers_status' => StatusView::summary(Server::all()), 'services_status' => StatusView::summary(Service::all())];
+                }),
+
+            new Tool('diagnose_service', 'Diagnose a service health check', 'Probe one service several ways (port, http and https, with and without its domain as Host header, common health paths, other common web ports on the same address) and say what would make its check pass. Changes nothing unless apply=true, which saves the recommended settings.',
+                self::IDENT + ['apply' => Tool::bool('Save the recommended settings (default false).')],
+                [], 'admin', false, false, function (array $a) {
+                    @set_time_limit(120);
+                    $model = self::service($a)->load('server');
+                    $result = (new Diagnoser)->run($model, \App\Support\Settings::timeout());
+
+                    if (($a['apply'] ?? false) && ! empty($result['changes'])) {
+                        $model->update(ServiceInput::validate($result['changes'], $model));
+                        $result['applied'] = true;
+                    }
+
+                    return ['service' => $model->name, 'diagnosis' => $result];
                 }),
 
             new Tool('create_server', 'Add a server', 'Add a server. Validation is identical to the admin form.',

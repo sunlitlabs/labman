@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -52,6 +53,12 @@ class LoginController extends Controller
         }
 
         RateLimiter::clear($key);
+
+        // Upgrade an old bcrypt hash to the current algorithm now that we hold the plain password.
+        if (Hash::needsRehash($user->password)) {
+            $user->forceFill(['password' => $credentials['password']])->save();
+        }
+
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 

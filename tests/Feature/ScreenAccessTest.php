@@ -108,13 +108,21 @@ class ScreenAccessTest extends TestCase
             ->assertDontSee('href="'.route('users.index').'"', false);
     }
 
-    public function test_home_redirects_to_the_first_visible_screen(): void
+    public function test_home_is_the_dashboard_for_anyone_who_may_see_services_or_servers(): void
     {
-        $this->get('/')->assertRedirect(route('login'));
-        $this->actingAs($this->user())->get('/')->assertRedirect(route('services.index'));
+        Server::create(['name' => 'nas', 'address' => '192.0.2.10']);
+        Service::create(['name' => 'Wiki', 'address' => '192.0.2.20', 'scheme' => 'http', 'path' => '/']);
 
+        $this->get('/')->assertRedirect(route('login'));
+        $this->actingAs($this->user())->get('/')->assertOk()->assertSee('Wiki')->assertSee('nas');
+
+        // Only what the viewer may see is on it.
         Settings::set(['visibility.services' => 'admins']);
-        $this->actingAs($this->user())->get('/')->assertRedirect(route('servers.index'));
+        $this->actingAs($this->user())->get('/')->assertOk()->assertDontSee('Wiki')->assertSee('nas');
+
+        // Nothing visible at all: a plain user is refused, like the pages themselves.
+        Settings::set(['visibility.servers' => 'admins']);
+        $this->actingAs($this->user())->get('/')->assertForbidden();
     }
 
     // ------------------------------------------------------------ JSON status

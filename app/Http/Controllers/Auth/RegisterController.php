@@ -25,7 +25,7 @@ class RegisterController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
         ]);
 
         $user = new User(['name' => $data['name'], 'email' => mb_strtolower($data['email']), 'password' => $data['password']]);

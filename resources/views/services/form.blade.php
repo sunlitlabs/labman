@@ -53,8 +53,20 @@
                     <input id="path" name="path" type="text" maxlength="500" value="{{ old('path', $service->path ?: '/') }}">
                 </div>
                 <div class="field">
-                    <label for="expect">Healthy status <span class="hint">e.g. 200, 200-499, 401</span></label>
-                    <input id="expect" name="expect" type="text" maxlength="12" value="{{ old('expect', $service->expect ?: '200-399') }}">
+                    <label for="expect">Healthy status <span class="hint">e.g. 200, 200-499, 200-399,401</span></label>
+                    <input id="expect" name="expect" type="text" maxlength="60" value="{{ old('expect', $service->expect ?: '200-499') }}">
+                </div>
+                <div class="field">
+                    <label for="health_path">Health path <span class="hint">(optional, if different from Path, e.g. /health)</span></label>
+                    <input id="health_path" name="health_path" type="text" maxlength="500" placeholder="/health" value="{{ old('health_path', $service->health_path) }}">
+                </div>
+                <div class="field">
+                    <label for="icon">Icon <span class="hint">(optional, e.g. jellyfin; blank = guess from the name, none = no icon)</span></label>
+                    <input id="icon" name="icon" type="text" maxlength="80" autocomplete="off" list="icon-list" data-suggest-url="{{ route('icons.search') }}" value="{{ old('icon', $service->icon) }}">
+                    <datalist id="icon-list"></datalist>
+                    @if ($service->exists && ! $service->icon && ($auto = \App\Icons\Icons::slugFor($service)))
+                        <small class="hint">Currently matched from the name: {{ $auto }}</small>
+                    @endif
                 </div>
                 <div class="field">
                     <label for="notes">Notes <span class="hint">(optional)</span></label>
@@ -62,7 +74,8 @@
                 </div>
             </div>
 
-            @foreach (['public_check' => 'Also check the public domain over HTTPS', 'verify_tls' => 'Verify the certificate of the public check', 'websockets' => 'Uses websockets (informational)'] as $flag => $text)
+            <p class="muted">A service shows as up when <strong>any</strong> check passes: the web request, an open port, or its public address.</p>
+            @foreach (['monitor' => 'Monitor this service (untick to hide its status: "not monitored")', 'check_tcp' => 'An open port counts as up, even if the web request fails', 'public_check' => 'Also check the public domain over HTTPS', 'verify_tls' => 'Verify the certificate of the public check', 'websockets' => 'Uses websockets (informational)'] as $flag => $text)
                 <label class="check">
                     <input type="hidden" name="{{ $flag }}" value="0">
                     <input type="checkbox" name="{{ $flag }}" value="1" @checked((bool) old($flag, $service->{$flag}))>
@@ -73,6 +86,9 @@
             <div class="actions">
                 <button class="primary" type="submit">Save</button>
                 <a class="btn" href="{{ route('services.index') }}">Cancel</a>
+                @if ($service->exists)
+                    <a class="btn" href="{{ route('services.diagnose', $service) }}">Diagnose health check…</a>
+                @endif
             </div>
         </form>
 

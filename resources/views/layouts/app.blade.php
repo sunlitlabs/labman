@@ -16,6 +16,9 @@
         <a class="brand" href="{{ url('/') }}">{{ \App\Support\Settings::title() }}</a>
         @unless (request()->is('setup'))
         <nav class="nav" aria-label="Main">
+            @if (Gate::allows('view-screen', 'services') || Gate::allows('view-screen', 'servers'))
+                <a href="{{ route('home') }}" @if(request()->routeIs('home')) aria-current="page" @endif>Dashboard</a>
+            @endif
             @can('view-screen', 'services')
                 <a href="{{ route('services.index') }}" @if(request()->routeIs('services.*')) aria-current="page" @endif>Services</a>
             @endcan

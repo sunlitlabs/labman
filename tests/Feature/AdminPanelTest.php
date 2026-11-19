@@ -196,8 +196,10 @@ class AdminPanelTest extends TestCase
         $this->assertMatchesRegularExpression('#name="registration_mode" value="approval"\s+checked#', $html);
     }
 
-    public function test_the_home_page_still_lands_on_the_first_visible_main_page(): void
+    public function test_the_home_page_is_the_dashboard_and_links_to_the_main_pages(): void
     {
-        $this->actingAs($this->admin)->get('/')->assertRedirect(route('services.index'));
+        $this->actingAs($this->admin)->get('/')->assertOk()
+            ->assertSee('href="'.route('services.index').'"', false)
+            ->assertSee('href="'.route('servers.index').'"', false);
     }
 }

@@ -10,6 +10,12 @@ class Server extends Model
 {
     protected $fillable = [
         'name', 'address', 'domain', 'group', 'ports', 'ssh_user', 'ssh_port', 'notes', 'inventory_host',
+        'monitor', 'check_ssh', 'icon',
+    ];
+
+    protected $attributes = [
+        'monitor' => true,
+        'check_ssh' => true,
     ];
 
     protected function casts(): array
@@ -18,6 +24,8 @@ class Server extends Model
             'ports' => 'array',
             'checks' => 'array',
             'ssh_port' => 'integer',
+            'monitor' => 'boolean',
+            'check_ssh' => 'boolean',
             'checked_at' => 'datetime',
         ];
     }
@@ -27,11 +35,13 @@ class Server extends Model
         return $this->hasMany(Service::class);
     }
 
-    /** TCP ports to probe: the SSH port first, then the extra ones. @return list<int> */
+    /** TCP ports to probe: the SSH port first (unless it is switched off), then the extra ones. @return list<int> */
     public function checkPorts(): array
     {
         $ports = array_map('intval', $this->ports ?? []);
-        array_unshift($ports, (int) $this->ssh_port ?: 22);
+        if ($this->check_ssh) {
+            array_unshift($ports, (int) $this->ssh_port ?: 22);
+        }
 
         return array_values(array_unique($ports));
     }

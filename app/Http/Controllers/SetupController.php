@@ -37,7 +37,7 @@ class SetupController extends Controller
         $rules = [
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email:rfc', 'max:255'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
             'title' => ['required', 'string', 'max:60'],
             'registration_mode' => ['required', Rule::in(config('labman.registration_modes'))],
             'yaml' => ['nullable', 'string', 'max:500000'],

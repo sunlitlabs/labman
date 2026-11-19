@@ -41,6 +41,16 @@
             </div>
 
             <div class="formcard">
+                <h2>Icons</h2>
+                <p class="sub">Show an icon next to each service and server, matched from its name. Icons come from the public <a href="https://github.com/homarr-labs/dashboard-icons" rel="noopener noreferrer">Dashboard Icons</a> library (Apache-2.0; the logos belong to their respective owners). LabMan fetches each one once through its own server and caches it, so your browser never contacts anyone else. Switch this off to stop all fetching.</p>
+                <label class="check">
+                    <input type="hidden" name="icons" value="0">
+                    <input type="checkbox" name="icons" value="1" @checked((bool) old('icons', $values['icons']))>
+                    Show icons
+                </label>
+            </div>
+
+            <div class="formcard">
                 <h2>Copy SSH</h2>
                 <p class="sub">What the Servers page copies when you click a server: <code>ssh [-p port] [user@]host</code>.</p>
                 <div class="grid2">

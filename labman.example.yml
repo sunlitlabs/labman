@@ -21,6 +21,9 @@ servers:
     group: Compute
     ssh_user: deploy     # overrides settings.ssh_user
     ssh_port: 22
+    icon: docker         # optional icon name
+    check_ssh: true      # false: do not count the SSH port as a health check
+    monitor: true        # false: hide its status ("not monitored")
 
 services:
   - name: Wiki
@@ -30,14 +33,17 @@ services:
     scheme: http         # http | https
     path: /              # must start with /
     group: Apps
-    expect: 200-399      # healthy status range: 200, 200-499, 401 ...
+    expect: 200-499      # healthy statuses: 200, 200-399,401 ... (default 200-499)
+    health_path: /health # optional: request this instead of path for the health check
+    icon: wikijs         # optional icon name; omit to guess from the name, "none" for no icon
     verify_tls: true     # applies to the public (domain) check only
     public_check: true
+    check_tcp: true      # an open port counts as up even if the web check fails (default true)
     websockets: false    # informational for now
   - name: Router
     address: 192.0.2.1   # a service without a server uses its own address
     port: 443
     scheme: https
     group: Network
-    expect: 200-499
+    monitor: false       # hide its status ("not monitored"); it is still listed
     public_check: false

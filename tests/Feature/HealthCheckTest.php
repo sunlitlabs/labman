@@ -33,7 +33,9 @@ class HealthCheckTest extends TestCase
     {
         return Service::create($attributes + [
             'name' => 'svc'.uniqid(), 'address' => '127.0.0.1', 'port' => $port,
-            'scheme' => 'http', 'path' => $path, 'expect' => '200-399', 'public_check' => false,
+            'scheme' => 'http', 'path' => $path, 'public_check' => false,
+            // The web check on its own by default; the open-port fallback has its own tests below.
+            'check_tcp' => false,
         ]);
     }
 
@@ -100,7 +102,7 @@ class HealthCheckTest extends TestCase
         }
     }
 
-    public function test_default_expect_range_is_200_to_399(): void
+    public function test_default_expect_range_is_200_to_499(): void
     {
         $port = $this->startHttpServer();
 
@@ -109,12 +111,111 @@ class HealthCheckTest extends TestCase
         $this->assertSame('HTTP 200', $ok['checks'][0]->detail);
         $this->assertNotNull($ok['checks'][0]->ms);
 
+        // Any answer that is not a server error means the app is running (401 login pages, 404 on "/", ...).
+        foreach (['/nope', '/unauthorized', '/forbidden'] as $path) {
+            $this->assertSame(Verdict::UP, $this->outcome($this->service($port, $path))['state'], $path);
+        }
+
         $error = $this->outcome($this->service($port, '/error'));
         $this->assertSame(Verdict::DOWN, $error['state']);
-        $this->assertSame('HTTP 500 (expected 200-399)', $error['checks'][0]->detail);
+        $this->assertSame('HTTP 500 (expected 200-499)', $error['checks'][0]->detail);
+    }
 
-        $missing = $this->outcome($this->service($port, '/nope'));
-        $this->assertSame('HTTP 404 (expected 200-399)', $missing['checks'][0]->detail);
+    public function test_expect_accepts_a_list_of_ranges(): void
+    {
+        $port = $this->startHttpServer();
+
+        $svc = fn (string $path) => $this->service($port, $path, ['expect' => '200,401']);
+
+        $this->assertSame(Verdict::UP, $this->outcome($svc('/unauthorized'))['state']);
+        $this->assertSame(Verdict::DOWN, $this->outcome($svc('/forbidden'))['state']);
+    }
+
+    // ------------------------------------------------- any check passing means up
+
+    public function test_an_open_port_keeps_a_service_up_when_the_web_check_fails(): void
+    {
+        $port = $this->startHttpServer();
+
+        $result = $this->outcome($this->service($port, '/error', ['check_tcp' => true]));
+
+        $this->assertSame(Verdict::UP, $result['state']);
+        $this->assertFalse($result['checks'][0]->ok);
+        $this->assertTrue($result['checks'][1]->ok);
+        $this->assertSame('tcp :'.$port, $result['checks'][1]->label);
+
+        // With the port check switched off, the same service is down.
+        $this->assertSame(Verdict::DOWN, $this->outcome($this->service($port, '/error', ['check_tcp' => false]))['state']);
+    }
+
+    public function test_a_closed_port_is_still_down_with_the_port_check_on(): void
+    {
+        $this->assertSame(Verdict::DOWN, $this->outcome($this->service($this->closedPort(), '/', ['check_tcp' => true]))['state']);
+    }
+
+    public function test_the_public_address_alone_is_enough_to_be_up(): void
+    {
+        Http::fake(['https://ha.example.com/*' => Http::response('ok', 200)]);
+
+        // LabMan cannot reach the backend (another VLAN), but the public name answers.
+        $result = $this->outcome($this->service($this->closedPort(), '/', ['domain' => 'ha.example.com', 'public_check' => true, 'check_tcp' => true]));
+
+        $this->assertSame(Verdict::UP, $result['state']);
+    }
+
+    public function test_a_name_based_proxy_is_asked_for_the_right_host(): void
+    {
+        $port = $this->startHttpServer();
+
+        // /vhost answers 200 only for Host: vhost.example.com and 421 for anything else.
+        $plain = $this->outcome($this->service($port, '/vhost', ['expect' => '200']));
+        $this->assertSame(Verdict::DOWN, $plain['state']);
+
+        $named = $this->outcome($this->service($port, '/vhost', ['expect' => '200', 'domain' => 'vhost.example.com']));
+        $this->assertSame(Verdict::UP, $named['state']);
+        $this->assertStringContainsString('Host: vhost.example.com', $named['checks'][0]->detail);
+    }
+
+    public function test_a_separate_health_path_is_used_for_the_check(): void
+    {
+        $port = $this->startHttpServer();
+
+        $result = $this->outcome($this->service($port, '/error', ['health_path' => '/ok']));
+
+        $this->assertSame(Verdict::UP, $result['state']);
+        $this->assertSame('HTTP 200', $result['checks'][0]->detail);
+    }
+
+    public function test_unmonitored_items_are_skipped_and_reported_as_off(): void
+    {
+        $port = $this->startHttpServer();
+        $watched = $this->service($port, '/ok');
+        $hidden = $this->service($this->closedPort(), '/', ['monitor' => false]);
+        $quiet = $this->server(['monitor' => false, 'ssh_port' => $this->closedPort()]);
+
+        $this->checker()->run();
+
+        $this->assertSame(Verdict::UP, $watched->fresh()->state);
+        $this->assertSame(Verdict::OFF, StatusView::of($hidden->fresh())['state']);
+        $this->assertSame(Verdict::OFF, $hidden->fresh()->state);
+        $this->assertSame(Verdict::OFF, StatusView::of($quiet->fresh())['state']);
+
+        // Not counted in the totals.
+        $this->assertSame(['up' => 1, 'degraded' => 0, 'down' => 0, 'unknown' => 0], StatusView::summary(Service::all()));
+    }
+
+    public function test_the_ssh_port_check_can_be_switched_off(): void
+    {
+        $extra = $this->openPort();
+        $server = $this->server(['ssh_port' => $this->closedPort(), 'check_ssh' => false, 'ports' => [$extra]]);
+
+        $result = $this->checker()->checkServers([$server], 2)[$server->id];
+
+        $this->assertSame(Verdict::UP, $result['state']);
+        $this->assertSame(['tcp :'.$extra], array_map(fn ($c) => $c->label, $result['checks']));
+
+        $nothing = $this->server(['check_ssh' => false]);
+        $this->assertSame(Verdict::OFF, $this->checker()->checkServers([$nothing], 2)[$nothing->id]['state']);
     }
 
     public function test_custom_expect_ranges_and_single_codes(): void

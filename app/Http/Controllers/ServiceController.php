@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\ServiceInput;
 use App\Http\Requests\ServiceRequest;
 use App\Models\Server;
 use App\Models\Service;
+use App\Monitoring\Diagnoser;
 use App\Monitoring\StatusView;
+use App\Support\Settings;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class ServiceController extends Controller
 {
@@ -24,7 +28,7 @@ class ServiceController extends Controller
     public function create()
     {
         return view('services.form', [
-            'service' => new Service(['scheme' => 'http', 'path' => '/', 'expect' => '200-399', 'verify_tls' => true, 'public_check' => true]),
+            'service' => new Service(['scheme' => 'http', 'path' => '/', 'expect' => '200-499', 'verify_tls' => true, 'public_check' => true, 'monitor' => true, 'check_tcp' => true]),
             'servers' => Server::orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -49,6 +53,33 @@ class ServiceController extends Controller
         $service->update($request->payload());
 
         return redirect()->route('services.index')->with('status', 'Service updated.');
+    }
+
+    /** Probe the service several ways and show what would make its health check pass. */
+    public function diagnose(Service $service)
+    {
+        @set_time_limit(120);
+        $service->load('server');
+
+        return view('services.diagnose', [
+            'service' => $service,
+            'result' => (new Diagnoser)->run($service, Settings::timeout()),
+        ]);
+    }
+
+    /** Save the recommended settings (re-validated like any other edit). */
+    public function applyDiagnosis(Request $request, Service $service): RedirectResponse
+    {
+        $allowed = array_flip(['scheme', 'port', 'health_path', 'expect', 'check_tcp']);
+        $changes = array_intersect_key((array) $request->input('changes', []), $allowed);
+
+        if ($changes === []) {
+            return redirect()->route('services.edit', $service)->with('status', 'Nothing to change.');
+        }
+
+        $service->update(ServiceInput::validate($changes, $service));
+
+        return redirect()->route('services.edit', $service)->with('status', 'Health check settings updated. The result appears after the next check round.');
     }
 
     public function destroy(Service $service): RedirectResponse

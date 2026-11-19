@@ -29,7 +29,8 @@
                                  data-ssh="{{ $ssh }}" aria-label="Copy SSH command for {{ $server->name }}: {{ $ssh }}"
                                  data-filter="{{ strtolower(implode(' ', [$server->name, $server->domain, $server->address, $server->group, $server->notes])) }}">
                             @include('partials.health', ['item' => $server])
-                            <div class="cell name">
+                            <div class="cell name withicon">
+                                @include('partials.icon', ['model' => $server])
                                 <span class="nm">{{ $server->name }}</span>
                                 @if ($server->notes)<small>{{ $server->notes }}</small>@endif
                             </div>

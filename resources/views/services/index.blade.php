@@ -30,7 +30,8 @@
                                  @if ($open) data-href="{{ $open }}" @endif
                                  data-filter="{{ strtolower(implode(' ', [$service->name, $service->domain, $backend, $service->group, $service->notes])) }}">
                             @include('partials.health', ['item' => $service])
-                            <div class="cell name">
+                            <div class="cell name withicon">
+                                @include('partials.icon', ['model' => $service])
                                 @if ($open)
                                     <a href="{{ $open }}" target="_blank" rel="noopener noreferrer">{{ $service->name }}</a>
                                 @else

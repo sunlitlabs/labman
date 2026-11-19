@@ -39,6 +39,12 @@ class MonitorCommand extends Command
                 $this->error('round failed: '.$e->getMessage());
             }
 
+            try {
+                \App\Icons\Icons::refresh(); // a no-op unless the icon index is missing or a week old
+            } catch (Throwable $e) {
+                report($e);
+            }
+
             if ($this->option('once')) {
                 break;
             }

@@ -13,6 +13,9 @@ final class Verdict
 
     public const UNKNOWN = 'unknown';
 
+    /** Switched off by the admin: never checked, never shown as up or down. */
+    public const OFF = 'off';
+
     /** Server: all ports pass = up, some = degraded, none = down, no results = unknown. @param list<CheckResult> $results */
     public static function server(array $results): string
     {

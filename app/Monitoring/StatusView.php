@@ -17,11 +17,17 @@ final class StatusView
 
         return [
             'id' => $model->id,
-            'state' => $model->checked_at === null ? Verdict::UNKNOWN : $model->state,
+            'state' => ! $model->monitor ? Verdict::OFF : ($model->checked_at === null ? Verdict::UNKNOWN : $model->state),
             'stale' => $stale,
             'checked_at' => $model->checked_at?->toIso8601String(),
             'checks' => $model->checks ?? [],
         ];
+    }
+
+    /** What a state is called on screen. */
+    public static function label(string $state): string
+    {
+        return $state === Verdict::OFF ? 'not monitored' : $state;
     }
 
     /** @param iterable<Server|Service> $models @return array{up: int, degraded: int, down: int, unknown: int} */
@@ -30,7 +36,10 @@ final class StatusView
         $counts = ['up' => 0, 'degraded' => 0, 'down' => 0, 'unknown' => 0];
 
         foreach ($models as $model) {
-            $counts[self::of($model)['state']]++;
+            $state = self::of($model)['state'];
+            if (isset($counts[$state])) { // unmonitored items are not counted
+                $counts[$state]++;
+            }
         }
 
         return $counts;

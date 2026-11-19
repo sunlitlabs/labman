@@ -4,6 +4,8 @@ namespace App\Monitoring;
 
 use App\Models\Server;
 use App\Models\Service;
+use App\Support\ExpectRange;
+use App\Support\Hosts;
 use App\Support\Settings;
 use GuzzleHttp\TransferStats;
 use Illuminate\Http\Client\ConnectionException;
@@ -15,9 +17,16 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Runs one health-check round: every server (TCP) and every service (HTTP),
- * concurrently, then stores the outcome on the rows. Pages and the JSON endpoint
- * only ever read what is stored here.
+ * Runs one health-check round: every monitored server (TCP) and service (HTTP and TCP), concurrently, then
+ * stores the outcome on the rows. Pages and the JSON endpoint only ever read what is stored here.
+ *
+ * A service is UP when ANY of its backend checks passes:
+ *   - the web check (GET scheme://address:port/health_path-or-path, status within `expect`), also tried with the
+ *     domain as the Host header for services behind name-based proxies, or
+ *   - the port being open (switchable per service), which covers apps that answer oddly (401, 404, 500, the
+ *     other scheme) but are plainly running.
+ * It is also UP when only the public https://<domain> check passes (LabMan may simply not reach the backend), DEGRADED
+ * when the backend is up but the public check fails, and DOWN only when nothing passes. Switched-off ("not monitored") items are skipped and shown as such.
  */
 class HealthChecker
 {
@@ -30,8 +39,8 @@ class HealthChecker
         Settings::flush();
         $timeout = Settings::timeout();
 
-        $servers = Server::all();
-        $services = Service::with('server')->get();
+        $servers = Server::where('monitor', true)->get();
+        $services = Service::with('server')->where('monitor', true)->get();
 
         try {
             $serverOutcomes = $this->checkServers($servers, $timeout);
@@ -50,6 +59,11 @@ class HealthChecker
         $this->store('servers', $serverOutcomes);
         $this->store('services', $serviceOutcomes);
 
+        // Items the admin switched off are shown as "not monitored", whatever they showed before.
+        foreach (['servers', 'services'] as $table) {
+            DB::table($table)->where('monitor', false)->where('state', '!=', Verdict::OFF)->update(['state' => Verdict::OFF, 'checks' => null]);
+        }
+
         return [
             'servers' => count($serverOutcomes),
             'services' => count($serviceOutcomes),
@@ -58,7 +72,7 @@ class HealthChecker
     }
 
     /**
-     * TCP connect to the SSH port plus every extra port.
+     * TCP connect to the SSH port (unless switched off) plus every extra port.
      *
      * @param  iterable<Server>  $servers
      * @return array<int, array{state: string, checks: list<CheckResult>}>  keyed by server id
@@ -70,9 +84,14 @@ class HealthChecker
 
         foreach ($servers as $server) {
             foreach ($server->checkPorts() as $port) {
-                $label = $port === (int) $server->ssh_port ? "ssh :{$port}" : "tcp :{$port}";
+                $label = $port === (int) $server->ssh_port && $server->check_ssh ? "ssh :{$port}" : "tcp :{$port}";
                 $targets["{$server->id}:{$port}"] = [$server->address, $port, $label];
                 $order[$server->id][] = "{$server->id}:{$port}";
+            }
+
+            // Nothing to check (SSH off, no extra ports): there is nothing to report either.
+            if (! isset($order[$server->id])) {
+                $order[$server->id] = [];
             }
         }
 
@@ -81,49 +100,57 @@ class HealthChecker
         $outcomes = [];
         foreach ($order as $id => $keys) {
             $checks = array_values(array_filter(array_map(fn ($k) => $results[$k] ?? null, $keys)));
-            $outcomes[$id] = ['state' => Verdict::server($checks), 'checks' => $checks];
+            $outcomes[$id] = $keys === []
+                ? ['state' => Verdict::OFF, 'checks' => []]
+                : ['state' => Verdict::server($checks), 'checks' => $checks];
         }
 
         return $outcomes;
     }
 
     /**
-     * Backend GET (TLS not verified, redirects not followed) and, when the service
-     * has a domain and public_check is on, a second GET to https://<domain><path>.
-     *
      * @param  iterable<Service>  $services
      * @return array<int, array{state: string, checks: list<CheckResult>}>  keyed by service id
      */
     public function checkServices(iterable $services, float $timeout): array
     {
         $outcomes = [];
-        $requests = [];
+        $requests = [];   // key => [url, verify, headers]
         $meta = [];
+        $tcp = [];
 
         foreach ($services as $service) {
-            $backend = $service->backendUrl();
+            $address = $service->backendAddress();
 
-            if ($backend === null) {
-                $none = new CheckResult('backend', false, null, 'no address');
-                $outcomes[$service->id] = ['state' => Verdict::DOWN, 'checks' => [$none]];
+            if ($address === null) {
+                $outcomes[$service->id] = ['state' => Verdict::DOWN, 'checks' => [new CheckResult('backend', false, null, 'no address')]];
 
                 continue;
             }
 
             $meta[$service->id] = $service;
-            $requests["{$service->id}|backend"] = [$backend, false];
+            $url = $service->scheme.'://'.Hosts::forUrl($address).':'.$service->effectivePort().$service->healthPath();
 
+            $requests["{$service->id}|configured"] = [$url, false, []];
+            if ($service->domain) {
+                // Name-based proxies answer the IP:port with their default site; ask for the right one.
+                $requests["{$service->id}|host"] = [$url, false, ['Host' => $service->domain]];
+            }
             if ($service->domain && $service->public_check) {
-                $requests["{$service->id}|public"] = [$service->publicUrl(), (bool) $service->verify_tls];
+                $requests["{$service->id}|public"] = [$service->publicUrl(), (bool) $service->verify_tls, []];
+            }
+            if ($service->check_tcp) {
+                $tcp["{$service->id}:tcp"] = [$address, $service->effectivePort(), 'tcp :'.$service->effectivePort()];
             }
         }
 
         $times = [];
         $responses = $requests === [] ? [] : Http::pool(function (Pool $pool) use ($requests, $timeout, &$times) {
             $calls = [];
-            foreach ($requests as $key => [$url, $verify]) {
+            foreach ($requests as $key => [$url, $verify, $headers]) {
                 $calls[] = $pool->as($key)
                     ->withUserAgent('LabMan/1.0 (health check)')
+                    ->withHeaders($headers)
                     ->timeout($timeout)
                     ->connectTimeout($timeout)
                     ->withoutRedirecting()
@@ -139,23 +166,54 @@ class HealthChecker
             return $calls;
         });
 
+        $tcpResults = $tcp === [] ? [] : TcpProbe::probe($tcp, $timeout);
+
         foreach ($meta as $id => $service) {
             $range = $service->expectRange();
-            $backend = $this->interpret('backend', $responses["{$id}|backend"] ?? null, $times["{$id}|backend"] ?? null, $range);
+            $web = $this->interpret('backend', $responses["{$id}|configured"] ?? null, $times["{$id}|configured"] ?? null, $range);
+
+            if (! $web->ok && isset($requests["{$id}|host"])) {
+                $viaHost = $this->interpret('backend', $responses["{$id}|host"] ?? null, $times["{$id}|host"] ?? null, $range);
+
+                if ($viaHost->ok) {
+                    $web = new CheckResult('backend', true, $viaHost->ms, $viaHost->detail." (with Host: {$service->domain})");
+                } elseif (! str_starts_with($web->detail, 'HTTP') && str_starts_with($viaHost->detail, 'HTTP')) {
+                    $web = $viaHost; // at least this one got an answer: its detail explains more
+                }
+            }
+
+            $port = $tcpResults["{$id}:tcp"] ?? null;
             $public = isset($requests["{$id}|public"])
                 ? $this->interpret('public', $responses["{$id}|public"] ?? null, $times["{$id}|public"] ?? null, $range)
                 : null;
 
-            $outcomes[$id] = [
-                'state' => Verdict::service($backend, $public),
-                'checks' => array_values(array_filter([$backend, $public])),
-            ];
+            // Up if ANY check passes. Degraded only when the backend is fine but the public address is not (the proxy or DNS is broken).
+            // Down only when nothing passes: a backend LabMan cannot reach directly (another VLAN) is still up if its public address answers.
+            $backendUp = $web->ok || ($port !== null && $port->ok);
+            $publicUp = $public !== null && $public->ok;
+            $state = match (true) {
+                ! $backendUp && ! $publicUp => Verdict::DOWN,
+                $backendUp && $public !== null && ! $public->ok => Verdict::DEGRADED,
+                default => Verdict::UP,
+            };
+
+            // The port result is only worth showing when it is the reason the service is up (or an extra clue when it is down).
+            $checks = [$web];
+            if ($port !== null && ! $web->ok) {
+                $checks[] = $port;
+            }
+            if ($public !== null) {
+                $checks[] = $public;
+            }
+
+            $outcomes[$id] = ['state' => $state, 'checks' => $checks];
         }
 
         return $outcomes;
     }
 
-    private function interpret(string $label, mixed $response, ?float $seconds, \App\Support\ExpectRange $range): CheckResult
+    /** Turn an HTTP response (or the exception that replaced it) into a check result. */
+    public function interpret(string $label, mixed $response, ?float $seconds, ExpectRange $range): CheckResult
     {
         $ms = $seconds !== null ? (int) round($seconds * 1000) : null;
 
@@ -176,7 +234,7 @@ class HealthChecker
         return new CheckResult($label, false, $ms, $this->describeFailure($message));
     }
 
-    private function describeFailure(string $message): string
+    public function describeFailure(string $message): string
     {
         $lower = strtolower($message);
 
@@ -185,6 +243,7 @@ class HealthChecker
             str_contains($lower, 'curl error 6'), str_contains($lower, 'resolve host') => 'could not resolve host',
             (bool) preg_match('/curl error (60|51|58|77|83|90|91)\b/', $lower) => 'certificate: '.$this->curlReason($message),
             str_contains($lower, 'curl error 35'), str_contains($lower, 'curl error 1:') => 'TLS/protocol error: '.$this->curlReason($message),
+            str_contains($lower, 'curl error 52'), str_contains($lower, 'empty reply') => 'empty reply (probably the wrong scheme: http vs https)',
             str_contains($lower, 'no route to host') => 'no route to host',
             str_contains($lower, 'unreachable') => 'network is unreachable',
             str_contains($lower, 'curl error 7'), str_contains($lower, 'refused') => 'connection refused',

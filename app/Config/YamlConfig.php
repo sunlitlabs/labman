@@ -116,6 +116,9 @@ final class YamlConfig
             'ssh_user' => $s->ssh_user,
             'ssh_port' => (int) $s->ssh_port !== 22 ? (int) $s->ssh_port : null,
             'notes' => $s->notes,
+            'monitor' => $s->monitor ? null : false,
+            'check_ssh' => $s->check_ssh ? null : false,
+            'icon' => $s->icon,
         ], fn ($v) => $v !== null && $v !== ''))->all();
 
         $services = Service::query()->with('server')->orderBy('group')->orderBy('name')->get()->map(fn (Service $s) => array_filter([
@@ -132,6 +135,10 @@ final class YamlConfig
             'public_check' => $s->public_check,
             'websockets' => $s->websockets,
             'notes' => $s->notes,
+            'health_path' => $s->health_path,
+            'monitor' => $s->monitor ? null : false,
+            'check_tcp' => $s->check_tcp ? null : false,
+            'icon' => $s->icon,
         ], fn ($v) => $v !== null && $v !== ''))->all();
 
         return "# LabMan config. Import with: php artisan labman:import <file>\n"
@@ -312,6 +319,9 @@ final class YamlConfig
                 $errors[] = "{$who}: 'ssh_user' may only contain letters, digits, '_', '.' and '-' and must not start with '-'";
             }
 
+            $flags = self::flags($who, $item, ['monitor' => true, 'check_ssh' => true], $errors);
+            $icon = self::icon($who, $item, $errors);
+
             $group = self::text($item['group'] ?? null);
             $notes = self::text($item['notes'] ?? null);
             self::lengths($who, $group, $notes, $errors);
@@ -326,6 +336,9 @@ final class YamlConfig
                     'ssh_user' => $sshUser ?: null,
                     'ssh_port' => $sshPort,
                     'notes' => $notes ?: null,
+                    'monitor' => $flags['monitor'],
+                    'check_ssh' => $flags['check_ssh'],
+                    'icon' => $icon,
                 ];
             }
         }
@@ -438,14 +451,16 @@ final class YamlConfig
                 }
             }
 
-            $flags = ['verify_tls' => true, 'public_check' => true, 'websockets' => false];
-            foreach ($flags as $flag => $default) {
-                if (array_key_exists($flag, $item)) {
-                    if (is_bool($item[$flag])) {
-                        $flags[$flag] = $item[$flag];
-                    } else {
-                        $errors[] = "{$who}: '{$flag}' must be true or false";
-                    }
+            $flags = self::flags($who, $item, ['verify_tls' => true, 'public_check' => true, 'websockets' => false, 'monitor' => true, 'check_tcp' => true], $errors);
+            $icon = self::icon($who, $item, $errors);
+
+            $healthPath = null;
+            if (array_key_exists('health_path', $item) && $item['health_path'] !== null && $item['health_path'] !== '') {
+                $healthPath = is_scalar($item['health_path']) ? (string) $item['health_path'] : '';
+                if (! str_starts_with($healthPath, '/')) {
+                    $errors[] = "{$who}: 'health_path' must start with /";
+                } elseif (! Hosts::isValidPath($healthPath)) {
+                    $errors[] = "{$who}: 'health_path' contains characters that are not allowed in a URL path";
                 }
             }
 
@@ -468,6 +483,10 @@ final class YamlConfig
                     'public_check' => $flags['public_check'],
                     'websockets' => $flags['websockets'],
                     'notes' => $notes ?: null,
+                    'health_path' => $healthPath,
+                    'monitor' => $flags['monitor'],
+                    'check_tcp' => $flags['check_tcp'],
+                    'icon' => $icon,
                 ];
             }
         }
@@ -476,6 +495,46 @@ final class YamlConfig
     }
 
     // ----------------------------------------------------------------- helpers
+
+    /**
+     * Read true/false switches from an entry, keeping the defaults for absent ones.
+     *
+     * @param  array<string, bool>  $defaults
+     * @param  list<string>  $errors
+     * @return array<string, bool>
+     */
+    private static function flags(string $who, array $item, array $defaults, array &$errors): array
+    {
+        foreach ($defaults as $flag => $default) {
+            if (array_key_exists($flag, $item)) {
+                if (is_bool($item[$flag])) {
+                    $defaults[$flag] = $item[$flag];
+                } else {
+                    $errors[] = "{$who}: '{$flag}' must be true or false";
+                }
+            }
+        }
+
+        return $defaults;
+    }
+
+    /** @param list<string> $errors */
+    private static function icon(string $who, array $item, array &$errors): ?string
+    {
+        $icon = self::text($item['icon'] ?? null);
+
+        if ($icon === null || $icon === '') {
+            return null;
+        }
+
+        if (! preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/', $icon)) {
+            $errors[] = "{$who}: 'icon' must be an icon name such as jellyfin or home-assistant (or none)";
+
+            return null;
+        }
+
+        return strtolower($icon);
+    }
 
     private static function text(mixed $value): ?string
     {

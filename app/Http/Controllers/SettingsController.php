@@ -40,7 +40,7 @@ class SettingsController extends Controller
     public function update(Request $request)
     {
         $sections = [
-            'general' => ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target'],
+            'general' => ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target', 'icons'],
             'access' => ['registration_mode', 'visibility'],
         ];
 
