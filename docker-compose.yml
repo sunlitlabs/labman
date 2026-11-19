@@ -1,0 +1,28 @@
+# LabMan example: `docker compose up -d --build`, then open http://localhost:8080
+services:
+  labman:
+    build: .
+    image: labman:latest
+    container_name: labman
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Database, generated APP_KEY, logs and your YAML config live here.
+      - labman-data:/data
+    environment:
+      # Optional: require this token in the first-run wizard (recommended if the port is exposed).
+      # LABMAN_SETUP_TOKEN: change-me-before-first-start
+      # Optional: behind a reverse proxy, trust it so HTTPS and host headers are detected.
+      # LABMAN_TRUSTED_PROXIES: "*"
+      # Optional: use PostgreSQL or MySQL instead of the bundled SQLite file.
+      # DB_CONNECTION: pgsql
+      # DB_HOST: db.example.com
+      # DB_PORT: "5432"
+      # DB_DATABASE: labman
+      # DB_USERNAME: labman
+      # DB_PASSWORD: change-me
+      TZ: UTC
+
+volumes:
+  labman-data:

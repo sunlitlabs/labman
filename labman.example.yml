@@ -1,0 +1,43 @@
+# LabMan example configuration: placeholder data only (RFC 5737 addresses, example.com).
+# Import in the UI (Settings > YAML import), at first-run setup, or with:
+#   php artisan labman:import labman.example.yml
+settings:
+  title: LabMan          # site title
+  check_interval: 30     # seconds, minimum 5
+  timeout: 4             # seconds, 0.5-60
+  ssh_user: admin        # default user for Copy SSH
+  ssh_target: address    # "address" or "domain"
+
+servers:
+  - name: nas
+    address: 192.0.2.10  # IP or hostname that is checked
+    domain: nas.example.com
+    group: Storage
+    ports: [445]         # extra TCP ports to check besides SSH
+    notes: File server
+  - name: docker-1
+    address: 192.0.2.20
+    domain: docker-1.example.com
+    group: Compute
+    ssh_user: deploy     # overrides settings.ssh_user
+    ssh_port: 22
+
+services:
+  - name: Wiki
+    domain: wiki.example.com
+    server: docker-1     # a server name, OR use address (exactly one of the two)
+    port: 3000           # default 80, or 443 when scheme is https
+    scheme: http         # http | https
+    path: /              # must start with /
+    group: Apps
+    expect: 200-399      # healthy status range: 200, 200-499, 401 ...
+    verify_tls: true     # applies to the public (domain) check only
+    public_check: true
+    websockets: false    # informational for now
+  - name: Router
+    address: 192.0.2.1   # a service without a server uses its own address
+    port: 443
+    scheme: https
+    group: Network
+    expect: 200-499
+    public_check: false
