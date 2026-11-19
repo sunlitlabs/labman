@@ -30,7 +30,8 @@ final class NpmWizard
 
         foreach ($import as $item) {
             $serviceId = $item['data']['service_id'] ?? null;
-            $pushItem = $serviceId ? $push->get("svc:{$serviceId}") : null;
+            $pushKey = ($item['data']['scope'] ?? 'local') === 'public' ? "svc:{$serviceId}:public" : "svc:{$serviceId}";
+            $pushItem = $serviceId ? $push->get($pushKey) : null;
 
             if ($pushItem) {
                 $coveredPush[$pushItem['key']] = true;

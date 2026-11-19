@@ -53,6 +53,7 @@ final class ServiceInput
         return [
             'name' => ['required', 'string', 'max:100', Rule::unique('services', 'name')->ignore($ignore)],
             'domain' => ['nullable', 'string', 'max:253', Check::hostname()],
+            'public_domain' => ['nullable', 'string', 'max:253', Check::hostname(), 'different:domain'],
             'server_id' => ['nullable', 'integer', 'exists:servers,id'],
             'address' => ['nullable', 'string', 'max:253', Check::hostOrIp()],
             'port' => ['nullable', 'integer', 'between:1,65535'],
@@ -90,6 +91,7 @@ final class ServiceInput
         $validated['address'] = $validated['server_id'] ? null : ($validated['address'] ?? null);
         $validated['health_path'] = filled($validated['health_path'] ?? null) ? $validated['health_path'] : null;
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
+        $validated['public_domain'] = filled($validated['public_domain'] ?? null) ? strtolower($validated['public_domain']) : null;
 
         return $validated;
     }
@@ -125,6 +127,7 @@ final class ServiceInput
         return [
             'name' => $service->name,
             'domain' => $service->domain,
+            'public_domain' => $service->public_domain,
             'server_id' => $service->server_id,
             'address' => $service->address,
             'port' => $service->port,

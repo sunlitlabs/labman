@@ -19,6 +19,9 @@ final class FakeNpm
     /** @var list<array{method: string, path: string, body: array}> every request seen */
     public array $requests = [];
 
+    /** @var list<array<string, mixed>> */
+    public array $certificates = [];
+
     public bool $twoFactor = false;
 
     public string $password = 'npm-secret';
@@ -89,6 +92,10 @@ final class FakeNpm
 
         if (($request->header('Authorization')[0] ?? '') !== 'Bearer fake-jwt') {
             return Http::response(['error' => ['code' => 401, 'message' => 'Unauthorized']], 401);
+        }
+
+        if ($path === '/api/nginx/certificates' && $method === 'GET') {
+            return Http::response($this->certificates);
         }
 
         if ($path === '/api/nginx/proxy-hosts' && $method === 'GET') {

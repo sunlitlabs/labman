@@ -39,7 +39,13 @@
                                 @endif
                                 @if ($service->notes)<small>{{ $service->notes }}</small>@endif
                             </div>
-                            <div class="cell domain{{ $service->domain ? '' : ' is-empty' }}">{{ $service->domain ?: '—' }}</div>
+                            <div class="cell domain{{ $service->domain || $service->public_domain ? '' : ' is-empty' }}">
+                                @forelse (array_filter(['local' => $service->domain, 'public' => $service->public_domain]) as $scope => $name)
+                                    <span class="dom">{{ $name }}@if ($service->domain && $service->public_domain) <small class="scope scope-{{ $scope }}">{{ $scope }}</small>@endif</span>
+                                @empty
+                                    —
+                                @endforelse
+                            </div>
                             <div class="cell addr mono">{{ $backend }}</div>
                             @include('partials.detail', ['item' => $service])
                             <div class="cell actions">

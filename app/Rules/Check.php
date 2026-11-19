@@ -2,6 +2,7 @@
 
 namespace App\Rules;
 
+use App\Support\Domains;
 use App\Support\ExpectRange;
 use App\Support\Hosts;
 use Closure;
@@ -58,6 +59,17 @@ final class Check
         return function (string $attribute, mixed $value, Closure $fail) {
             if (! is_string($value) || ! preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/', $value)) {
                 $fail('The :attribute must be an icon name such as jellyfin or home-assistant (letters, digits, - . _), or none.');
+            }
+        };
+    }
+
+    /** A comma separated list of domain names (home.example.com, lab.example.net). */
+    public static function domainList(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) {
+            $bad = is_string($value) ? Domains::firstInvalid(Domains::parse($value)) : 'value';
+            if ($bad !== null) {
+                $fail("The :attribute has an entry that is not a domain name: '{$bad}'. Separate several with commas.");
             }
         };
     }

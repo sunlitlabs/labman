@@ -18,7 +18,7 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class YamlConfig
 {
-    private const SETTINGS_KEYS = ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target'];
+    private const SETTINGS_KEYS = ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target', 'local_domains', 'public_domains', 'npm_cert_local', 'npm_cert_public'];
 
     /**
      * @return array{settings: array<string, mixed>, servers: list<array<string, mixed>>, services: list<array<string, mixed>>}
@@ -105,6 +105,10 @@ final class YamlConfig
             'timeout' => Settings::get('timeout'),
             'ssh_user' => Settings::get('ssh_user') ?: null,
             'ssh_target' => Settings::get('ssh_target'),
+            'local_domains' => Settings::get('local_domains') ?: null,
+            'public_domains' => Settings::get('public_domains') ?: null,
+            'npm_cert_local' => Settings::get('npm_cert_local') !== '' && Settings::get('npm_cert_local') !== null ? (int) Settings::get('npm_cert_local') : null,
+            'npm_cert_public' => Settings::get('npm_cert_public') !== '' && Settings::get('npm_cert_public') !== null ? (int) Settings::get('npm_cert_public') : null,
         ], fn ($v) => $v !== null);
 
         $servers = Server::query()->orderBy('group')->orderBy('name')->get()->map(fn (Server $s) => array_filter([
@@ -124,6 +128,7 @@ final class YamlConfig
         $services = Service::query()->with('server')->orderBy('group')->orderBy('name')->get()->map(fn (Service $s) => array_filter([
             'name' => $s->name,
             'domain' => $s->domain,
+            'public_domain' => $s->public_domain,
             'server' => $s->server?->name,
             'address' => $s->server ? null : $s->address,
             'port' => $s->port,
@@ -205,6 +210,28 @@ final class YamlConfig
                     $errors[] = "settings: timeout must be between {$min} and {$max} seconds";
                 } else {
                     $out['timeout'] = $numbers['timeout'];
+                }
+            }
+        }
+
+        foreach (['local_domains', 'public_domains'] as $key) {
+            if (array_key_exists($key, $raw)) {
+                $list = \App\Support\Domains::parse(is_array($raw[$key]) ? $raw[$key] : (is_scalar($raw[$key]) ? (string) $raw[$key] : ''));
+                $bad = \App\Support\Domains::firstInvalid($list);
+                if ($bad !== null) {
+                    $errors[] = "settings: {$key} has an entry that is not a domain name: '{$bad}'";
+                } else {
+                    $out[$key] = implode(', ', $list);
+                }
+            }
+        }
+
+        foreach (['npm_cert_local', 'npm_cert_public'] as $key) {
+            if (array_key_exists($key, $raw)) {
+                if ($raw[$key] === null || $raw[$key] === '' || (is_int($raw[$key]) && $raw[$key] >= 0)) {
+                    $out[$key] = (string) ($raw[$key] ?? '');
+                } else {
+                    $errors[] = "settings: {$key} must be an NPM certificate id (a whole number), or empty";
                 }
             }
         }
@@ -413,6 +440,16 @@ final class YamlConfig
                 $errors[] = "{$who}: 'domain' must be a host name, not '{$domain}'";
             }
 
+            $publicDomain = self::text($item['public_domain'] ?? null);
+            if ($publicDomain !== null && $publicDomain !== '') {
+                $publicDomain = mb_strtolower($publicDomain);
+                if (! Hosts::isHostname($publicDomain)) {
+                    $errors[] = "{$who}: 'public_domain' must be a host name, not '{$publicDomain}'";
+                } elseif ($publicDomain === mb_strtolower((string) $domain)) {
+                    $errors[] = "{$who}: 'public_domain' must differ from 'domain'";
+                }
+            }
+
             $scheme = 'http';
             if (array_key_exists('scheme', $item)) {
                 if (in_array($item['scheme'], ['http', 'https'], true)) {
@@ -472,6 +509,7 @@ final class YamlConfig
                 $out[] = [
                     'name' => $name,
                     'domain' => $domain ?: null,
+                    'public_domain' => $publicDomain ?: null,
                     'server' => $hasServer ? $server : null,
                     'address' => $hasAddress ? $address : null,
                     'port' => $port,

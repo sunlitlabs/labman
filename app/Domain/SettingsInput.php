@@ -3,6 +3,7 @@
 namespace App\Domain;
 
 use App\Rules\Check;
+use App\Support\Domains;
 use App\Support\Settings;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -23,6 +24,10 @@ final class SettingsInput
             'ssh_target' => ['required', Rule::in(['address', 'domain'])],
             'registration_mode' => ['required', Rule::in(config('labman.registration_modes'))],
             'icons' => ['boolean'],
+            'local_domains' => ['nullable', 'string', 'max:500', Check::domainList()],
+            'public_domains' => ['nullable', 'string', 'max:500', Check::domainList()],
+            'npm_cert_local' => ['nullable', 'integer', 'min:0'],
+            'npm_cert_public' => ['nullable', 'integer', 'min:0'],
         ];
 
         foreach (config('labman.screens') as $screen) {
@@ -42,6 +47,9 @@ final class SettingsInput
             $out[$key] = $all[$key];
         }
         $out['icons'] = Settings::icons();
+        foreach (['local_domains', 'public_domains', 'npm_cert_local', 'npm_cert_public'] as $key) {
+            $out[$key] = (string) ($all[$key] ?? '');
+        }
         foreach (config('labman.screens') as $screen) {
             $out['visibility'][$screen] = $all['visibility.'.$screen];
         }
@@ -62,6 +70,16 @@ final class SettingsInput
     {
         $values = collect($validated)->except('visibility')->all();
         $values['ssh_user'] = $values['ssh_user'] ?? '';
+        foreach (['local_domains', 'public_domains'] as $key) {
+            if (array_key_exists($key, $values)) {
+                $values[$key] = implode(', ', Domains::parse($values[$key]));
+            }
+        }
+        foreach (['npm_cert_local', 'npm_cert_public'] as $key) {
+            if (array_key_exists($key, $values)) {
+                $values[$key] = (string) ($values[$key] ?? '');
+            }
+        }
         if (array_key_exists('icons', $values)) {
             $values['icons'] = filter_var($values['icons'], FILTER_VALIDATE_BOOLEAN) ? '1' : '0';
         }

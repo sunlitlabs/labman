@@ -132,12 +132,16 @@ class HealthChecker
             $url = $service->scheme.'://'.Hosts::forUrl($address).':'.$service->effectivePort().$service->healthPath();
 
             $requests["{$service->id}|configured"] = [$url, false, []];
-            if ($service->domain) {
+            $hostName = $service->domain ?: $service->public_domain;
+            if ($hostName) {
                 // Name-based proxies answer the IP:port with their default site; ask for the right one.
-                $requests["{$service->id}|host"] = [$url, false, ['Host' => $service->domain]];
+                $requests["{$service->id}|host"] = [$url, false, ['Host' => $hostName]];
             }
-            if ($service->domain && $service->public_check) {
-                $requests["{$service->id}|public"] = [$service->publicUrl(), (bool) $service->verify_tls, []];
+            if ($service->public_check) {
+                // Each name the service has is checked over HTTPS: the primary (usually local) one and the public one.
+                foreach ($this->domainChecks($service) as $label => $domainUrl) {
+                    $requests["{$service->id}|{$label}"] = [$domainUrl, (bool) $service->verify_tls, []];
+                }
             }
             if ($service->check_tcp) {
                 $tcp["{$service->id}:tcp"] = [$address, $service->effectivePort(), 'tcp :'.$service->effectivePort()];
@@ -176,24 +180,28 @@ class HealthChecker
                 $viaHost = $this->interpret('backend', $responses["{$id}|host"] ?? null, $times["{$id}|host"] ?? null, $range);
 
                 if ($viaHost->ok) {
-                    $web = new CheckResult('backend', true, $viaHost->ms, $viaHost->detail." (with Host: {$service->domain})");
+                    $web = new CheckResult('backend', true, $viaHost->ms, $viaHost->detail.' (with Host: '.($service->domain ?: $service->public_domain).')');
                 } elseif (! str_starts_with($web->detail, 'HTTP') && str_starts_with($viaHost->detail, 'HTTP')) {
                     $web = $viaHost; // at least this one got an answer: its detail explains more
                 }
             }
 
             $port = $tcpResults["{$id}:tcp"] ?? null;
-            $public = isset($requests["{$id}|public"])
-                ? $this->interpret('public', $responses["{$id}|public"] ?? null, $times["{$id}|public"] ?? null, $range)
-                : null;
+            $names = [];
+            foreach (array_keys($this->domainChecks($service)) as $label) {
+                if (isset($requests["{$id}|{$label}"])) {
+                    $names[] = $this->interpret($label, $responses["{$id}|{$label}"] ?? null, $times["{$id}|{$label}"] ?? null, $range);
+                }
+            }
 
-            // Up if ANY check passes. Degraded only when the backend is fine but the public address is not (the proxy or DNS is broken).
-            // Down only when nothing passes: a backend LabMan cannot reach directly (another VLAN) is still up if its public address answers.
+            // Up if ANY check passes. Degraded only when the backend is fine but one of its names is not (the proxy or DNS is broken).
+            // Down only when nothing passes: a backend LabMan cannot reach directly (another VLAN) is still up if a name answers.
             $backendUp = $web->ok || ($port !== null && $port->ok);
-            $publicUp = $public !== null && $public->ok;
+            $nameUp = collect($names)->contains(fn (CheckResult $c) => $c->ok);
+            $nameDown = collect($names)->contains(fn (CheckResult $c) => ! $c->ok);
             $state = match (true) {
-                ! $backendUp && ! $publicUp => Verdict::DOWN,
-                $backendUp && $public !== null && ! $public->ok => Verdict::DEGRADED,
+                ! $backendUp && ! $nameUp => Verdict::DOWN,
+                $backendUp && $nameDown => Verdict::DEGRADED,
                 default => Verdict::UP,
             };
 
@@ -202,14 +210,32 @@ class HealthChecker
             if ($port !== null && ! $web->ok) {
                 $checks[] = $port;
             }
-            if ($public !== null) {
-                $checks[] = $public;
-            }
+            array_push($checks, ...$names);
 
             $outcomes[$id] = ['state' => $state, 'checks' => $checks];
         }
 
         return $outcomes;
+    }
+
+    /**
+     * The HTTPS name checks of a service, by label. With only one name it is called "public" (as it always was);
+     * with both, the primary one is "local" and the second "public".
+     *
+     * @return array<string, string> label => URL
+     */
+    private function domainChecks(Service $service): array
+    {
+        $out = [];
+
+        if ($service->domain) {
+            $out[$service->public_domain ? 'local' : 'public'] = $service->localUrl();
+        }
+        if ($service->public_domain) {
+            $out['public'] = $service->publicDomainUrl();
+        }
+
+        return $out;
     }
 
     /** Turn an HTTP response (or the exception that replaced it) into a check result. */

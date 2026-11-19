@@ -41,6 +41,40 @@
             </div>
 
             <div class="formcard">
+                <h2>Domains</h2>
+                <p class="sub">
+                    If you use one domain at home and another from the internet, list them here (several allowed, separated by commas).
+                    A service can then have a name under each; LabMan shows both, checks both, and tells NPM proxy hosts apart by which list
+                    their name falls under. Leave both empty if you only use one domain.
+                </p>
+                <div class="grid2">
+                    <div class="field">
+                        <label for="local_domains">Local domains <span class="hint">resolve on your network, e.g. home.example.com</span></label>
+                        <input id="local_domains" name="local_domains" type="text" maxlength="500" autocomplete="off" value="{{ old('local_domains', $values['local_domains']) }}">
+                    </div>
+                    <div class="field">
+                        <label for="public_domains">Public domains <span class="hint">reachable from the internet, e.g. example.org</span></label>
+                        <input id="public_domains" name="public_domains" type="text" maxlength="500" autocomplete="off" value="{{ old('public_domains', $values['public_domains']) }}">
+                    </div>
+                    @foreach (['npm_cert_local' => 'Certificate for local domains', 'npm_cert_public' => 'Certificate for public domains'] as $key => $label)
+                        <div class="field">
+                            <label for="{{ $key }}">{{ $label }} <span class="hint">used when LabMan creates a proxy host in NPM</span></label>
+                            @if ($certificates !== null)
+                                <select id="{{ $key }}" name="{{ $key }}">
+                                    <option value="">none (no SSL)</option>
+                                    @foreach ($certificates as $cert)
+                                        <option value="{{ $cert['id'] }}" @selected((string) old($key, $values[$key]) === (string) $cert['id'])>{{ $cert['name'] }}{{ $cert['domains'] ? ' ('.implode(', ', array_slice($cert['domains'], 0, 2)).')' : '' }}</option>
+                                    @endforeach
+                                </select>
+                            @else
+                                <input id="{{ $key }}" name="{{ $key }}" type="number" min="0" placeholder="NPM certificate id (connect NPM to pick from a list)" value="{{ old($key, $values[$key]) }}">
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="formcard">
                 <h2>Icons</h2>
                 <p class="sub">Show an icon next to each service and server, matched from its name. Icons come from the public <a href="https://github.com/homarr-labs/dashboard-icons" rel="noopener noreferrer">Dashboard Icons</a> library (Apache-2.0; the logos belong to their respective owners). LabMan fetches each one once through its own server and caches it, so your browser never contacts anyone else. Switch this off to stop all fetching.</p>
                 <label class="check">

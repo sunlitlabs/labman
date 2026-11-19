@@ -48,6 +48,26 @@ final class NpmClient
         return is_array($hosts) ? array_values(array_filter($hosts, 'is_array')) : [];
     }
 
+    /**
+     * The certificates uploaded to NPM, reduced to what a picker needs.
+     *
+     * @return list<array{id: int, name: string, domains: list<string>}>
+     */
+    public function certificates(): array
+    {
+        $certs = $this->authed('get', '/api/nginx/certificates')->json();
+        $out = [];
+
+        foreach (is_array($certs) ? $certs : [] as $cert) {
+            if (is_array($cert) && isset($cert['id'])) {
+                $domains = array_values(array_filter((array) ($cert['domain_names'] ?? []), 'is_string'));
+                $out[] = ['id' => (int) $cert['id'], 'name' => (string) ($cert['nice_name'] ?? '') ?: ($domains[0] ?? 'certificate '.$cert['id']), 'domains' => $domains];
+            }
+        }
+
+        return $out;
+    }
+
     /** @param array<string, mixed> $payload @return array<string, mixed> */
     public function updateProxyHost(int $id, array $payload): array
     {

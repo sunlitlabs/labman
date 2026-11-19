@@ -437,3 +437,9 @@ table.plain th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 
 .choices { border: 0; margin: 8px 0 0; padding: 0; display: flex; gap: 4px 18px; flex-wrap: wrap; }
 .choices .check { margin: 0; }
 details.formcard > summary { cursor: pointer; font-weight: 600; }
+
+/* ---- local / public domains ---- */
+.dom { display: block; }
+.scope { margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; background: var(--unknown-bg); color: var(--unknown); }
+.scope-public { background: var(--up-bg); color: var(--up); }
+.tile-public { font-size: 0.78rem; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

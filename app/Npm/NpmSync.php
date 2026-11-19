@@ -5,7 +5,9 @@ namespace App\Npm;
 use App\Domain\ServiceInput;
 use App\Models\Server;
 use App\Models\Service;
+use App\Support\Domains;
 use App\Support\Hosts;
+use App\Support\Settings;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -57,7 +59,7 @@ final class NpmSync
             try {
                 $existing = $item['data']['service_id'] ? Service::find($item['data']['service_id']) : null;
                 $payload = ServiceInput::validate($item['data']['input'], $existing);
-                $payload['npm_host_id'] = $item['data']['host_id'];
+                $payload[$item['data']['link_field']] = $item['data']['host_id'];
 
                 ($existing ?? new Service)->fill($payload)->save();
 
@@ -91,8 +93,21 @@ final class NpmSync
             return $this->finish($base + ['action' => 'skip'], ["Forward target '{$forwardHost}:{$port}' is not a valid host and port."]);
         }
 
-        $service = $services->first(fn (Service $s) => $s->npm_host_id === $id)
-            ?? $services->first(fn (Service $s) => $s->domain && in_array(mb_strtolower($s->domain), $usable, true));
+        $service = $services->first(fn (Service $s) => $s->npm_host_id === $id || $s->npm_public_host_id === $id)
+            ?? $services->first(fn (Service $s) => ($s->domain && in_array(mb_strtolower($s->domain), $usable, true))
+                || ($s->public_domain && in_array(mb_strtolower($s->public_domain), $usable, true)));
+
+        // Is this the local-domain host or the public-domain host? Evidence on the service first, then the configured domains.
+        $scope = $this->scopeOf($usable[0], $service, $id);
+
+        // Nothing matched yet: the same app under the other domain (wiki.<local> vs wiki.<public>) belongs to the same service.
+        if ($service === null && Domains::scope($usable[0]) !== null) {
+            $label = Domains::label($usable[0]);
+            $service = $services->first(fn (Service $s) => ($scope === 'public' ? ($s->public_domain === null && $s->npm_public_host_id === null) : ($s->domain === null && $s->npm_host_id === null))
+                && (($s->domain && Domains::label($s->domain) === $label) || ($s->public_domain && Domains::label($s->public_domain) === $label) || mb_strtolower($s->name) === $label));
+        }
+        $domainField = $scope === 'public' ? 'public_domain' : 'domain';
+        $linkField = $scope === 'public' ? 'npm_public_host_id' : 'npm_host_id';
 
         $server = $servers->first(fn (Server $s) => strcasecmp($s->address, $forwardHost) === 0);
         $websockets = (bool) ($host['allow_websocket_upgrade'] ?? false);
@@ -112,7 +127,7 @@ final class NpmSync
         if ($service === null) {
             $name = $this->freeName($usable[0], $usedNames, $id);
             $input = [
-                'name' => $name, 'domain' => $usable[0], 'scheme' => $scheme, 'port' => $this->storedPort($scheme, $port),
+                'name' => $name, $domainField => $usable[0], 'scheme' => $scheme, 'port' => $this->storedPort($scheme, $port),
                 'server_id' => $server?->id, 'address' => $server ? null : $forwardHost,
                 'websockets' => $websockets, 'public_check' => (bool) ($host['enabled'] ?? true),
                 'notes' => "Imported from Nginx Proxy Manager host #{$id}",
@@ -120,24 +135,26 @@ final class NpmSync
 
             $changes = [
                 ['field' => 'name', 'from' => null, 'to' => $name],
-                ['field' => 'domain', 'from' => null, 'to' => $usable[0]],
+                ['field' => $domainField, 'from' => null, 'to' => $usable[0]],
                 ['field' => 'backend', 'from' => null, 'to' => "{$scheme}://".$backendLabel($server?->id, $forwardHost).":{$port}"],
                 ['field' => 'websockets', 'from' => null, 'to' => $websockets ? 'on' : 'off'],
             ];
 
-            return $this->finish($base + ['action' => 'create', 'changes' => $changes, 'data' => ['service_id' => null, 'host_id' => $id, 'input' => $input]], $warnings);
+            return $this->finish($base + ['action' => 'create', 'changes' => $changes, 'data' => ['service_id' => null, 'host_id' => $id, 'link_field' => $linkField, 'scope' => $scope, 'input' => $input]], $warnings);
         }
 
         // Existing service: touch only the NPM-owned fields.
         $input = ['scheme' => $scheme, 'port' => $this->storedPort($scheme, $port), 'server_id' => $server?->id, 'address' => $server ? null : $forwardHost, 'websockets' => $websockets];
         $changes = [];
 
-        if ($service->npm_host_id !== $id) {
-            $changes[] = ['field' => 'link', 'from' => $service->npm_host_id ? "NPM host #{$service->npm_host_id}" : 'not linked', 'to' => "NPM host #{$id}"];
+        $linked = $service->{$linkField};
+        if ($linked !== $id) {
+            $changes[] = ['field' => 'link', 'from' => $linked ? "NPM host #{$linked}" : 'not linked', 'to' => "NPM host #{$id}"];
         }
-        if (! $service->domain || ! in_array(mb_strtolower($service->domain), $usable, true)) {
-            $input['domain'] = $usable[0];
-            $changes[] = ['field' => 'domain', 'from' => $service->domain, 'to' => $usable[0]];
+        $currentName = $service->{$domainField};
+        if (! $currentName || ! in_array(mb_strtolower($currentName), $usable, true)) {
+            $input[$domainField] = $usable[0];
+            $changes[] = ['field' => $domainField, 'from' => $currentName, 'to' => $usable[0]];
         }
         if ($service->scheme !== $scheme) {
             $changes[] = ['field' => 'scheme', 'from' => $service->scheme, 'to' => $scheme];
@@ -158,7 +175,7 @@ final class NpmSync
         return $this->finish($base + [
             'action' => $changes ? 'update' : 'unchanged',
             'changes' => $changes,
-            'data' => ['service_id' => $service->id, 'host_id' => $id, 'input' => $input],
+            'data' => ['service_id' => $service->id, 'host_id' => $id, 'link_field' => $linkField, 'scope' => $scope, 'input' => $input],
         ], $warnings);
     }
 
@@ -170,8 +187,14 @@ final class NpmSync
         $hosts = collect($this->client->proxyHosts());
         $items = [];
 
-        foreach (Service::with('server')->whereNotNull('domain')->orderBy('name')->get() as $service) {
-            $items[] = $this->pushItem($service, $hosts);
+        $services = Service::with('server')->where(fn ($q) => $q->whereNotNull('domain')->orWhereNotNull('public_domain'))->orderBy('name')->get();
+
+        foreach ($services as $service) {
+            foreach (['local' => $service->domain, 'public' => $service->public_domain] as $scope => $name) {
+                if (filled($name)) {
+                    $items[] = $this->pushItem($service, $hosts, $scope);
+                }
+            }
         }
 
         return $items;
@@ -199,7 +222,7 @@ final class NpmSync
                 }
 
                 if ($hostId > 0) {
-                    Service::whereKey($data['service_id'])->update(['npm_host_id' => $hostId]);
+                    Service::whereKey($data['service_id'])->update([$data['link_field'] => $hostId]);
                 }
 
                 $applied++;
@@ -213,16 +236,19 @@ final class NpmSync
     }
 
     /** @param Collection<int, array<string, mixed>> $hosts */
-    private function pushItem(Service $service, Collection $hosts): array
+    private function pushItem(Service $service, Collection $hosts, string $scope = 'local'): array
     {
-        $base = ['key' => "svc:{$service->id}", 'title' => $service->name.' → '.$service->domain];
+        $public = $scope === 'public';
+        $domain = mb_strtolower((string) ($public ? $service->public_domain : $service->domain));
+        $linkField = $public ? 'npm_public_host_id' : 'npm_host_id';
+        $linkedId = $service->{$linkField};
+        $base = ['key' => $public ? "svc:{$service->id}:public" : "svc:{$service->id}", 'title' => $service->name.' → '.$domain];
         $address = $service->backendAddress();
 
         if ($address === null) {
             return $this->finish($base + ['action' => 'skip'], ['The service has no address, so there is nothing to forward to.']);
         }
 
-        $domain = mb_strtolower($service->domain);
         $port = $service->effectivePort();
         $desired = [
             'forward_scheme' => $service->scheme,
@@ -231,13 +257,15 @@ final class NpmSync
             'allow_websocket_upgrade' => (bool) $service->websockets,
         ];
 
-        $host = $hosts->first(fn ($h) => $service->npm_host_id !== null && (int) $h['id'] === $service->npm_host_id)
+        $host = $hosts->first(fn ($h) => $linkedId !== null && (int) $h['id'] === $linkedId)
             ?? $hosts->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true));
 
         if ($host === null) {
+            // The certificate chosen for this kind of domain (Settings > Domains), so a new host is not left without SSL.
+            $cert = (int) Settings::get('npm_cert_'.$scope);
             $payload = $desired + [
                 'domain_names' => [$domain],
-                'certificate_id' => 0, 'ssl_forced' => false, 'http2_support' => false, 'hsts_enabled' => false, 'hsts_subdomains' => false,
+                'certificate_id' => $cert, 'ssl_forced' => $cert > 0, 'http2_support' => $cert > 0, 'hsts_enabled' => false, 'hsts_subdomains' => false,
                 'block_exploits' => true, 'caching_enabled' => false, 'access_list_id' => 0, 'advanced_config' => '', 'enabled' => true,
                 'meta' => new \stdClass, 'locations' => [],
             ];
@@ -246,8 +274,10 @@ final class NpmSync
 
             return $this->finish($base + [
                 'action' => 'create', 'changes' => $changes,
-                'data' => ['service_id' => $service->id, 'payload' => $payload],
-            ], ['No proxy host for this domain exists yet. A new one is created without SSL; add a certificate in NPM afterwards.']);
+                'data' => ['service_id' => $service->id, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload],
+            ], [$cert > 0
+                ? "No proxy host for this domain exists yet. A new one is created with the {$scope}-domain certificate chosen in Settings (#{$cert}), forcing SSL."
+                : 'No proxy host for this domain exists yet. A new one is created without SSL; add a certificate in NPM afterwards (or pick one under Settings > Domains so new hosts get it).']);
         }
 
         $hostId = (int) $host['id'];
@@ -282,7 +312,7 @@ final class NpmSync
         return $this->finish($base + [
             'action' => $changes ? 'update' : 'unchanged',
             'changes' => $changes,
-            'data' => ['service_id' => $service->id, 'host_id' => $hostId, 'payload' => $payload, 'modified_on' => $host['modified_on'] ?? null],
+            'data' => ['service_id' => $service->id, 'host_id' => $hostId, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload, 'modified_on' => $host['modified_on'] ?? null],
         ], $warnings);
     }
 
@@ -325,6 +355,27 @@ final class NpmSync
         $item['fingerprint'] = sha1(json_encode([$item['key'], $item['action'], $item['changes'], $item['data'] ?? null]));
 
         return $item;
+    }
+
+    /** 'local' or 'public' for a proxy host's name: what is known about the service first, then the configured domains. */
+    private function scopeOf(string $domain, ?Service $service, int $hostId): string
+    {
+        if ($service !== null) {
+            if ($service->npm_public_host_id === $hostId) {
+                return 'public';
+            }
+            if ($service->npm_host_id === $hostId) {
+                return 'local';
+            }
+            if ($service->public_domain && mb_strtolower($service->public_domain) === $domain) {
+                return 'public';
+            }
+            if ($service->domain && mb_strtolower($service->domain) === $domain) {
+                return 'local';
+            }
+        }
+
+        return Domains::scope($domain) ?? 'local';
     }
 
     private function storedPort(string $scheme, int $port): ?int

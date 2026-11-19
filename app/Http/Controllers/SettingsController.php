@@ -15,7 +15,17 @@ class SettingsController extends Controller
     /** General settings. Read-only for non-admins who are allowed to see the screen (the view disables the form). */
     public function general()
     {
-        return view('settings.general', ['values' => Settings::all()]);
+        // The certificate pickers need NPM's list; without a (working) connection the page just omits them.
+        $certificates = null;
+        if (\App\Npm\Connection::summary()) {
+            try {
+                $certificates = \App\Npm\NpmClient::fromStored()->certificates();
+            } catch (\Throwable) {
+                $certificates = null;
+            }
+        }
+
+        return view('settings.general', ['values' => Settings::all(), 'certificates' => $certificates]);
     }
 
     public function access()
@@ -40,7 +50,7 @@ class SettingsController extends Controller
     public function update(Request $request)
     {
         $sections = [
-            'general' => ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target', 'icons'],
+            'general' => ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target', 'icons', 'local_domains', 'public_domains', 'npm_cert_local', 'npm_cert_public'],
             'access' => ['registration_mode', 'visibility'],
         ];
 

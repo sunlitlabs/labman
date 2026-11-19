@@ -22,9 +22,18 @@
                         <label for="group">Group <span class="hint">optional heading</span></label>
                         <input id="group" name="group" type="text" maxlength="60" value="{{ old('group', $service->group) }}">
                     </div>
+                    @php($localHint = \App\Support\Domains::local()[0] ?? null)
+                    @php($publicHint = \App\Support\Domains::public()[0] ?? null)
                     <div class="field">
-                        <label for="domain">Public domain <span class="hint">optional; clicking the service opens it</span></label>
-                        <input id="domain" name="domain" type="text" maxlength="253" placeholder="wiki.example.com" value="{{ old('domain', $service->domain) }}">
+                        <label for="domain">{{ $publicHint || $localHint ? 'Local domain' : 'Domain' }} <span class="hint">optional; clicking the service opens it</span></label>
+                        <input id="domain" name="domain" type="text" maxlength="253" placeholder="wiki.{{ $localHint ?? 'example.com' }}" value="{{ old('domain', $service->domain) }}">
+                    </div>
+                    <div class="field">
+                        <label for="public_domain">Public domain <span class="hint">optional second name reachable from the internet</span></label>
+                        <input id="public_domain" name="public_domain" type="text" maxlength="253" placeholder="wiki.{{ $publicHint ?? 'example.org' }}" value="{{ old('public_domain', $service->public_domain) }}">
+                        @unless ($publicHint || $localHint)
+                            <small class="hint">Set your local and public domains under Settings > General to get suggestions and per-domain NPM certificates.</small>
+                        @endunless
                     </div>
                 </div>
             </section>

@@ -49,7 +49,8 @@ final class CatalogTools
 
         $service = [
             'name' => Tool::str('Unique service name.'),
-            'domain' => Tool::str('Optional public domain; enables the public HTTPS check and is what clicking the service opens.'),
+            'domain' => Tool::str('Optional primary domain, normally the local one (wiki.home.example.com); it is what clicking the service opens and is health-checked over HTTPS.'),
+            'public_domain' => Tool::str('Optional second domain reachable from the internet (wiki.example.com); checked too, shown as a second link and has its own proxy host in NPM.'),
             'server' => Tool::str('Name of the server it runs on (use this OR address).'),
             'address' => Tool::str('Its own IP/host name when it is not on a listed server (use this OR server).'),
             'port' => Tool::int('Backend port; default 80, or 443 for https.'),
@@ -73,6 +74,10 @@ final class CatalogTools
             'timeout' => Tool::num('Per-check timeout in seconds, 0.5 to 60.'),
             'ssh_user' => Tool::str('Default SSH user for Copy SSH.'),
             'ssh_target' => Tool::str('Which name Copy SSH connects to.', ['address', 'domain']),
+            'local_domains' => Tool::str('Comma separated domains that resolve on the home network (home.example.com). Empty if you only use one domain.'),
+            'public_domains' => Tool::str('Comma separated domains reachable from the internet (example.org).'),
+            'npm_cert_local' => Tool::str('NPM certificate id used when LabMan creates a proxy host for a local domain (empty = none).'),
+            'npm_cert_public' => Tool::str('NPM certificate id used when LabMan creates a proxy host for a public domain (empty = none).'),
             'registration_mode' => Tool::str('Who may register: off, open, or approval (open, admin approval required).', config('labman.registration_modes')),
             'visibility' => [
                 'type' => 'object',

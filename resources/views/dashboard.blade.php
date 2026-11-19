@@ -73,8 +73,11 @@
                             @include('partials.icon', ['model' => $service])
                             <div class="tile-body">
                                 <span class="tile-name">{{ $service->name }}</span>
-                                <small class="tile-sub">{{ $service->domain ?: ($service->backendAddress() ? \App\Support\Hosts::forUrl($service->backendAddress()).':'.$service->effectivePort() : 'no address') }}</small>
+                                <small class="tile-sub">{{ $service->domain ?: $service->public_domain ?: ($service->backendAddress() ? \App\Support\Hosts::forUrl($service->backendAddress()).':'.$service->effectivePort() : 'no address') }}</small>
                                 <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
+                                @if ($service->domain && $service->public_domain)
+                                    <a class="tile-public" href="{{ $service->publicDomainUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the public address">{{ $service->public_domain }}</a>
+                                @endif
                             </div>
                             <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>
                         </article>

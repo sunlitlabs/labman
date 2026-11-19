@@ -7,6 +7,10 @@ settings:
   timeout: 4             # seconds, 0.5-60
   ssh_user: admin        # default user for Copy SSH
   ssh_target: address    # "address" or "domain"
+  local_domains: home.example.com   # names that resolve on your network (several: a list or comma separated)
+  public_domains: example.org       # names reachable from the internet
+  npm_cert_local: 3                 # NPM certificate id for new proxy hosts under a local domain (optional)
+  npm_cert_public: 7                # ... and under a public domain (optional)
 
 servers:
   - name: nas
@@ -27,7 +31,8 @@ servers:
 
 services:
   - name: Wiki
-    domain: wiki.example.com
+    domain: wiki.home.example.com      # primary name (usually local); clicking the service opens it
+    public_domain: wiki.example.org    # optional second name, with its own NPM proxy host
     server: docker-1     # a server name, OR use address (exactly one of the two)
     port: 3000           # default 80, or 443 when scheme is https
     scheme: http         # http | https

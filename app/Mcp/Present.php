@@ -45,6 +45,7 @@ final class Present
             'id' => $service->id,
             'name' => $service->name,
             'domain' => $service->domain,
+            'public_domain' => $service->public_domain,
             'server' => $service->server?->name,
             'server_id' => $service->server_id,
             'address' => $service->address,
