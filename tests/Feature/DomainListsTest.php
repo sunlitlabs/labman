@@ -187,6 +187,26 @@ class DomainListsTest extends TestCase
         $this->assertSame([], $npm->writes(), 'a suggestion is saved in LabMan only');
     }
 
+    public function test_a_suggested_name_can_be_edited_before_applying(): void
+    {
+        FakeNpm::install();
+        Connection::save(FakeNpm::URL, 'npm@example.com', 'npm-secret', true);
+        $this->configure();
+        $wiki = Service::create(['name' => 'Wiki', 'address' => '192.0.2.5', 'scheme' => 'http', 'path' => '/']);
+        $blog = Service::create(['name' => 'Blog', 'address' => '192.0.2.6', 'scheme' => 'http', 'path' => '/']);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->get('/npm/wizard?suggest=1')->assertSee('name="domain_edit[suggest:svc:'.$wiki->id.']"', false);
+
+        $this->post('/npm/wizard', [
+            'choice' => ["suggest:svc:{$wiki->id}" => 'apply', "suggest:svc:{$blog->id}" => 'apply'],
+            'domain_edit' => ["suggest:svc:{$wiki->id}" => 'Docs.Home.Example.com', "suggest:svc:{$blog->id}" => 'not valid!'],
+        ]);
+
+        $this->assertSame('docs.home.example.com', $wiki->fresh()->domain);
+        $this->assertNull($blog->fresh()->domain, 'an invalid edit is refused, not saved');
+    }
+
     public function test_the_wizard_switch_is_unavailable_without_a_local_domain(): void
     {
         $npm = FakeNpm::install();

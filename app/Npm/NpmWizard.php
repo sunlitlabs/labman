@@ -5,6 +5,7 @@ namespace App\Npm;
 use App\Models\Server;
 use App\Models\Service;
 use App\Support\DomainSuggestions;
+use App\Support\Domains;
 
 /**
  * The guided view of an NPM sync: instead of two separate previews (import and push), one list of "things to
@@ -105,7 +106,7 @@ final class NpmWizard
      * @param  array<string, string>  $choices
      * @return list<array{title: string, outcome: string, message: string}>
      */
-    public static function applyDomainChoices(array $choices): array
+    public static function applyDomainChoices(array $choices, array $edited = []): array
     {
         $wanted = array_keys(array_filter($choices, fn ($c, $id) => $c === 'apply' && str_starts_with($id, 'suggest:'), ARRAY_FILTER_USE_BOTH));
         if ($wanted === []) {
@@ -120,6 +121,22 @@ final class NpmWizard
             $model = $prefix === 'svc' ? Service::find((int) $key) : ($prefix === 'srv' ? Server::find((int) $key) : null);
             $name = $suggestions[$prefix === 'svc' ? 'services' : 'servers'][(int) $key] ?? null;
 
+            // The person may have edited the suggested name; use theirs when it is a valid, unused host name.
+            if ($model !== null && isset($edited[$id]) && trim((string) $edited[$id]) !== '') {
+                $given = Domains::parse((string) $edited[$id]);
+                if (count($given) !== 1 || Domains::firstInvalid($given) !== null) {
+                    $results[] = ['title' => $model->name, 'outcome' => 'failed', 'message' => '"'.trim((string) $edited[$id]).'" is not a valid domain name.'];
+
+                    continue;
+                }
+                if ($given[0] !== $name && self::nameTaken($given[0], $model)) {
+                    $results[] = ['title' => $model->name, 'outcome' => 'failed', 'message' => "{$given[0]} is already used by something else."];
+
+                    continue;
+                }
+                $name = $given[0];
+            }
+
             if ($model === null || $name === null) {
                 $results[] = ['title' => $id, 'outcome' => 'failed', 'message' => 'That suggestion no longer applies (the item changed or the name is taken).'];
 
@@ -131,6 +148,22 @@ final class NpmWizard
         }
 
         return $results;
+    }
+
+    private static function nameTaken(string $name, $except): bool
+    {
+        foreach ([...Service::all(), ...Server::all()] as $item) {
+            if ($item::class === $except::class && $item->id === $except->id) {
+                continue;
+            }
+            foreach (Domains::namesOf($item) as $list) {
+                if (in_array($name, $list, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** @param array<string, mixed> $import @param array<string, mixed>|null $push */

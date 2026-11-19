@@ -67,9 +67,10 @@ class NpmController extends Controller
             'fp_import' => ['array'], 'fp_import.*' => ['string', 'size:40'],
             'push_key' => ['array'], 'push_key.*' => ['string', 'max:100'],
             'fp_push' => ['array'], 'fp_push.*' => ['string', 'size:40'],
+            'domain_edit' => ['array'], 'domain_edit.*' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $named = NpmWizard::applyDomainChoices($data['choice']);
+        $named = NpmWizard::applyDomainChoices($data['choice'], $data['domain_edit'] ?? []);
         $sel = NpmWizard::selections($data['choice'], $data['fp_import'] ?? [], $data['push_key'] ?? [], $data['fp_push'] ?? []);
 
         if ($sel['import'] === [] && $sel['push'] === [] && $named === []) {

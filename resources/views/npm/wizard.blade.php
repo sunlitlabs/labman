@@ -78,6 +78,12 @@
                                     @endforeach
                                 </ul>
                             @endif
+                            @if ($row['kind'] === 'suggest_domain')
+                                <div class="field">
+                                    <label for="de-{{ md5($row['id']) }}">Local name <span class="hint">edit it if the guess is off</span></label>
+                                    <input id="de-{{ md5($row['id']) }}" type="text" name="domain_edit[{{ $row['id'] }}]" value="{{ old('domain_edit.'.$row['id'], $row['changes'][0]['to']) }}" autocomplete="off" spellcheck="false" maxlength="255">
+                                </div>
+                            @endif
                             @foreach ($row['warnings'] as $w)<p class="warn">{{ $w }}</p>@endforeach
 
                             <fieldset class="choices">
