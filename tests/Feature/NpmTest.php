@@ -30,6 +30,7 @@ class NpmTest extends TestCase
 
         $this->admin = $this->admin(['email' => 'root@example.com']);
         $this->npm = FakeNpm::install();
+        \App\Npm\NpmAuto::setEnabled(false); // these tests are about the previewed, hand-applied sync
     }
 
     private function connect(): void

@@ -33,6 +33,10 @@ class AppServiceProvider extends ServiceProvider
         Server::saved(fn (Server $s) => \App\Semaphore\HostSync::queue());
         Server::deleted(fn (Server $s) => \App\Semaphore\HostSync::queue($s->inventory_host));
 
+        // LabMan is the source of truth for Nginx Proxy Manager: changed services update their proxy hosts.
+        \App\Models\Service::saved(fn (\App\Models\Service $s) => \App\Npm\NpmAuto::serviceSaved($s));
+        Server::saved(fn (Server $s) => \App\Npm\NpmAuto::serverSaved($s));
+
         // Editing anything is admin-only.
         Gate::define('admin', fn (?User $user) => Access::isAdmin($user));
     }

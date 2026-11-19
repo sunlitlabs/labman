@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Npm\Connection;
 use App\Npm\NpmClient;
+use App\Npm\NpmAuto;
 use App\Npm\NpmException;
 use App\Npm\NpmSync;
 use App\Npm\NpmWizard;
@@ -17,7 +18,20 @@ class NpmController extends Controller
 {
     public function index()
     {
-        return view('npm.index', ['connection' => Connection::summary()]);
+        // The certificate pickers need NPM's list; without a (working) connection the page falls back to ids.
+        $certificates = null;
+        if (Connection::summary()) {
+            try {
+                $certificates = NpmClient::fromStored()->certificates();
+            } catch (\Throwable) {
+                $certificates = null;
+            }
+        }
+
+        return view('npm.index', [
+            'connection' => Connection::summary(), 'certificates' => $certificates, 'values' => \App\Support\Settings::all(),
+            'auto' => NpmAuto::enabled(), 'last' => NpmAuto::last(),
+        ]);
     }
 
     public function connect(Request $request): RedirectResponse
@@ -90,6 +104,32 @@ class NpmController extends Controller
         return redirect()->route('npm.index')
             ->with('status', "{$applied} change(s) applied.")
             ->with('npm_results', array_merge($imported['results'], $pushed['results'], $named));
+    }
+
+    /** The local and public domain lists and the certificate for each. A changed certificate is pushed to NPM (when updating automatically). */
+    public function domains(Request $request): RedirectResponse
+    {
+        $keys = ['local_domains', 'public_domains', 'local_default', 'public_default', 'npm_cert_local', 'npm_cert_public'];
+        $rules = array_filter(\App\Domain\SettingsInput::rules(), fn ($key) => in_array($key, $keys, true), ARRAY_FILTER_USE_KEY);
+
+        $before = [\App\Support\Settings::get('npm_cert_local'), \App\Support\Settings::get('npm_cert_public')];
+        \App\Domain\SettingsInput::update($request->validate($rules));
+        $certChanged = $before !== [\App\Support\Settings::get('npm_cert_local'), \App\Support\Settings::get('npm_cert_public')];
+
+        $note = match (true) {
+            ! $certChanged => '',
+            NpmAuto::enabled() => ' The certificate change is being sent to the proxy hosts in NPM now; the result is shown below.',
+            default => ' Automatic updates are off, so use the push preview to send the certificate change to NPM.',
+        };
+
+        return redirect()->route('npm.index')->with('status', 'Domains saved.'.$note);
+    }
+
+    public function auto(Request $request): RedirectResponse
+    {
+        NpmAuto::setEnabled($request->boolean('auto'));
+
+        return redirect()->route('npm.index')->with('status', $request->boolean('auto') ? 'LabMan will now update NPM whenever a service changes.' : 'Automatic updates to NPM are off. Use the guided sync or the push preview.');
     }
 
     public function disconnect(): RedirectResponse

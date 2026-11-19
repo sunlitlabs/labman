@@ -91,7 +91,13 @@ final class SettingsInput
             $values["visibility.{$screen}"] = $level;
         }
 
+        $before = ['local' => (string) Settings::get('npm_cert_local', ''), 'public' => (string) Settings::get('npm_cert_public', '')];
+
         Settings::set($values);
+
+        // A different certificate for a kind of domain moves to every proxy host of that kind (when NPM is kept up to date automatically).
+        $changed = array_keys(array_filter($before, fn ($old, $scope) => array_key_exists('npm_cert_'.$scope, $values) && $values['npm_cert_'.$scope] !== $old, ARRAY_FILTER_USE_BOTH));
+        \App\Npm\NpmAuto::queueScopes($changed);
 
         return self::current();
     }

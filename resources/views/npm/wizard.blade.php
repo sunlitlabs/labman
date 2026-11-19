@@ -11,7 +11,7 @@
         'new_here' => ['In NPM, not in LabMan', 'These proxy hosts have no matching service. Adding them gives you a service with the right domain, address and port.'],
         'link_only' => ['Same thing, not linked yet', 'These match by domain. Linking them lets future syncs follow the proxy host even if the domain changes.'],
         'differs' => ['Linked, but the settings differ', 'Pick which side is right. NPM is what actually routes traffic, so its values are the default.'],
-        'suggest_domain' => ['Suggested local names', 'A best guess from each name, under your default local domain. Saved in LabMan only; run the sync again afterwards to create proxy hosts for them.'],
+        'suggest_domain' => ['Suggested local names', 'A best guess from each name, under your default local domain. Saved in LabMan; NPM gets a proxy host for each one straight away when NPM is kept up to date automatically, otherwise on the next sync.'],
         'new_there' => ['In LabMan, not in NPM', 'Services with a domain but no proxy host. Nothing is created in NPM unless you choose it (the new host has no SSL until you add a certificate in NPM).'],
     ];
     $actionable = collect($rows)->whereIn('kind', array_keys($sections));
@@ -42,7 +42,7 @@
         <label class="check">
             <input type="checkbox" name="suggest" value="1" @checked($suggest) @disabled(! $suggestAvailable) data-autosubmit>
             <span>Also suggest local domain names for services and servers that have none
-                <span class="hint">{{ $suggestAvailable ? 'Guessed from each name under '.\App\Support\Domains::defaultFor('local').'. Off by default.' : 'Set a local domain under Settings > General to use this.' }}</span></span>
+                <span class="hint">{{ $suggestAvailable ? 'Guessed from each name under '.\App\Support\Domains::defaultFor('local').'. Off by default.' : 'Set a local domain under Domains on the NPM page to use this.' }}</span></span>
         </label>
         <noscript><button class="btn" type="submit">Apply</button></noscript>
     </form>

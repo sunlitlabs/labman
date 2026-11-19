@@ -30,10 +30,15 @@ final class HostSync
 
     private const WATCH_EVERY = 600;
 
-    private static bool $queued = false;
+    /** What is waiting to be sent, kept on the application instance so it never leaks between requests (or tests). */
+    private static function pending(): \ArrayObject
+    {
+        if (! app()->bound('labman.semaphore.pending')) {
+            app()->instance('labman.semaphore.pending', new \ArrayObject(['queued' => false, 'removals' => []]));
+        }
 
-    /** @var list<string> */
-    private static array $removals = [];
+        return app('labman.semaphore.pending');
+    }
 
     // ================================================================ target
 
@@ -270,20 +275,19 @@ final class HostSync
         }
 
         if ($removeHost !== null && $removeHost !== '') {
-            self::$removals[] = $removeHost;
+            self::pending()['removals'] = [...self::pending()['removals'], $removeHost];
         }
 
-        if (! self::$queued) {
-            self::$queued = true;
+        if (! self::pending()['queued']) {
+            self::pending()['queued'] = true;
             app()->terminating(fn () => self::flush());
         }
     }
 
     public static function flush(): void
     {
-        $remove = self::$removals;
-        self::$queued = false;
-        self::$removals = [];
+        $remove = self::pending()['removals'];
+        self::pending()->exchangeArray(['queued' => false, 'removals' => []]);
 
         if (! self::auto()) {
             return;

@@ -181,13 +181,17 @@ final class NpmSync
 
     // ======================================================================== push
 
-    /** @return list<array<string, mixed>> plan items (LabMan -> NPM) */
-    public function pushPlan(): array
+    /**
+     * @param  list<int>|null  $only  only these services (null = all)
+     * @return list<array<string, mixed>> plan items (LabMan -> NPM)
+     */
+    public function pushPlan(?array $only = null): array
     {
         $hosts = collect($this->client->proxyHosts());
         $items = [];
 
-        $services = Service::with('server')->where(fn ($q) => $q->whereNotNull('domain')->orWhereNotNull('public_domain'))->orderBy('name')->get();
+        $services = Service::with('server')->where(fn ($q) => $q->whereNotNull('domain')->orWhereNotNull('public_domain'))
+            ->when($only !== null, fn ($q) => $q->whereIn('id', $only))->orderBy('name')->get();
 
         foreach ($services as $service) {
             foreach (['local' => $service->domain, 'public' => $service->public_domain] as $scope => $name) {
@@ -261,7 +265,7 @@ final class NpmSync
             ?? $hosts->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true));
 
         if ($host === null) {
-            // The certificate chosen for this kind of domain (Settings > Domains), so a new host is not left without SSL.
+            // The certificate chosen for this kind of domain (Domains on the NPM page), so a new host is not left without SSL.
             $cert = (int) Settings::get('npm_cert_'.$scope);
             $payload = $desired + [
                 'domain_names' => [$domain],
@@ -276,8 +280,8 @@ final class NpmSync
                 'action' => 'create', 'changes' => $changes,
                 'data' => ['service_id' => $service->id, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload],
             ], [$cert > 0
-                ? "No proxy host for this domain exists yet. A new one is created with the {$scope}-domain certificate chosen in Settings (#{$cert}), forcing SSL."
-                : 'No proxy host for this domain exists yet. A new one is created without SSL; add a certificate in NPM afterwards (or pick one under Settings > Domains so new hosts get it).']);
+                ? "No proxy host for this domain exists yet. A new one is created with the {$scope}-domain certificate chosen under Domains on the NPM page (#{$cert}), forcing SSL."
+                : 'No proxy host for this domain exists yet. A new one is created without SSL; add a certificate in NPM afterwards (or pick one under Domains on this page so new hosts get it).']);
         }
 
         $hostId = (int) $host['id'];
@@ -296,6 +300,17 @@ final class NpmSync
                 $payload[$field] = $value;
                 $changes[] = ['field' => $field, 'from' => is_bool($current[$field]) ? ($current[$field] ? 'on' : 'off') : $current[$field], 'to' => is_bool($value) ? ($value ? 'on' : 'off') : $value];
             }
+        }
+
+        // The certificate chosen for this kind of domain is the one the host should use.
+        $cert = (int) Settings::get('npm_cert_'.$scope);
+        $currentCert = (int) ($host['certificate_id'] ?? 0);
+        if ($cert > 0 && $currentCert !== $cert) {
+            $payload['certificate_id'] = $cert;
+            if ($currentCert === 0) {
+                $payload += ['ssl_forced' => true, 'http2_support' => true];
+            }
+            $changes[] = ['field' => 'certificate', 'from' => $currentCert > 0 ? "#{$currentCert}" : 'none', 'to' => "#{$cert}"];
         }
 
         $names = array_values((array) ($host['domain_names'] ?? []));

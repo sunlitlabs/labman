@@ -47,6 +47,65 @@
         </div>
     @endif
 
+    @if ($connection)
+        <form class="formcard" method="POST" action="{{ route('npm.auto') }}">
+            @csrf
+            <h2>Keep NPM up to date</h2>
+            <label class="check">
+                <input type="checkbox" name="auto" value="1" @checked($auto) data-autosubmit-form>
+                <span>Update NPM automatically when something changes here
+                    <span class="hint">LabMan is the source of truth: when a service, its server's address, or a certificate below changes, the matching proxy host is updated (or created) in NPM. LabMan never deletes anything in NPM.</span></span>
+            </label>
+            <div class="savebar"><button class="primary" type="submit">Save</button></div>
+        </form>
+
+        @if ($last)
+            <div class="card sync-status" role="status">
+                <h2>Last automatic update <span class="pill pill-{{ $last['ok'] ? 'up' : 'down' }}">{{ $last['ok'] ? 'ok' : 'failed' }}</span></h2>
+                <p class="muted">{{ \Illuminate\Support\Carbon::parse($last['at'])->diffForHumans() }} · {{ $last['applied'] }} proxy host(s) written</p>
+                <ul class="results">
+                    @foreach ($last['results'] as $r)
+                        <li class="{{ $r['outcome'] === 'applied' ? 'ok' : 'bad' }}"><strong>{{ $r['title'] }}</strong>: {{ $r['message'] }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+    @endif
+
+    <form class="formcard" method="POST" action="{{ route('npm.domains') }}">
+        @csrf @method('PUT')
+        <h2>Domains and certificates</h2>
+        <p class="sub">
+            If you use one domain at home and another from the internet, list them here (several allowed). A service can then have a name under each;
+            LabMan shows and checks both, and each gets its own proxy host in NPM with the certificate you pick for that kind of domain.
+            Changing a certificate here is sent to every proxy host of that kind. Leave both lists empty if you only use one domain.
+        </p>
+        <div class="grid2">
+            @foreach (['local' => ['Local domains', 'Names that resolve on your network.', 'home.example.com'], 'public' => ['Public domains', 'Names reachable from the internet.', 'example.org']] as $scope => [$title, $help, $example])
+                @php($list = \App\Support\Domains::parse(old($scope.'_domains', $values[$scope.'_domains'])))
+                <div class="field">
+                    <label>{{ $title }} <span class="hint">{{ $help }} The marked one is the default.</span></label>
+                    @include('partials.listedit', ['name' => $scope.'_domains', 'values' => $list, 'default' => old($scope.'_default', $list[0] ?? null), 'defaultName' => $scope.'_default', 'placeholder' => $example, 'addLabel' => 'Add '.$scope.' domain'])
+                </div>
+            @endforeach
+            @foreach (['npm_cert_local' => 'Certificate for local domains', 'npm_cert_public' => 'Certificate for public domains'] as $key => $label)
+                <div class="field">
+                    <label for="{{ $key }}">{{ $label }} <span class="hint">given to every proxy host of this kind</span></label>
+                    @if ($certificates !== null)
+                        <select id="{{ $key }}" name="{{ $key }}">
+                            <option value="">none (leave NPM's setting alone)</option>
+                            @foreach ($certificates as $cert)
+                                <option value="{{ $cert['id'] }}" @selected((string) old($key, $values[$key]) === (string) $cert['id'])>{{ $cert['name'] }}{{ $cert['domains'] ? ' ('.implode(', ', array_slice($cert['domains'], 0, 2)).')' : '' }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <input id="{{ $key }}" name="{{ $key }}" type="number" min="0" placeholder="NPM certificate id (connect NPM to pick from a list)" value="{{ old($key, $values[$key]) }}">
+                    @endif
+                </div>
+            @endforeach
+        </div>
+        <div class="savebar"><button class="primary" type="submit">Save domains</button></div>
+    </form>
     <form class="card" method="POST" action="{{ route('npm.connect') }}">
         @csrf
         <h2>{{ $connection ? 'Change connection' : 'Connect' }}</h2>

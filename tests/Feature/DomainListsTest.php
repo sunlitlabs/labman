@@ -35,8 +35,7 @@ class DomainListsTest extends TestCase
 
     public function test_the_settings_form_posts_lists_with_a_default_and_the_default_goes_first(): void
     {
-        $this->actingAs($this->admin())->put('/settings', [
-            'section' => 'general', 'title' => 'LabMan', 'check_interval' => 30, 'timeout' => 4, 'ssh_target' => 'address', 'icons' => 1,
+        $this->actingAs($this->admin())->put('/npm/domains', [
             'local_domains' => ['a.example.com', 'B.example.com', '', 'a.example.com'], 'local_default' => 'b.example.com',
             'public_domains' => ['example.org'], 'public_default' => 'example.org',
         ])->assertSessionHasNoErrors();
@@ -50,7 +49,7 @@ class DomainListsTest extends TestCase
     {
         $this->configure();
 
-        $html = $this->actingAs($this->admin1())->get('/settings')->assertOk()->assertSee('Add local domain')->assertSee('Add public domain')->getContent();
+        $html = $this->actingAs($this->admin1())->get('/npm')->assertOk()->assertSee('Add local domain')->assertSee('Add public domain')->getContent();
 
         $this->assertStringContainsString('name="local_domains[]" value="home.example.com"', $html);
         $this->assertMatchesRegularExpression('#name="local_default" value="home.example.com"\s+checked#', $html);
@@ -170,6 +169,7 @@ class DomainListsTest extends TestCase
     {
         $npm = FakeNpm::install();
         Connection::save(FakeNpm::URL, 'npm@example.com', 'npm-secret', true);
+        \App\Npm\NpmAuto::setEnabled(false); // with automatic updates on, a saved name also creates its proxy host
         $this->configure();
         $wiki = Service::create(['name' => 'Wiki', 'address' => '192.0.2.5', 'scheme' => 'http', 'path' => '/']);
         $other = Service::create(['name' => 'Other', 'address' => '192.0.2.6', 'scheme' => 'http', 'path' => '/']);

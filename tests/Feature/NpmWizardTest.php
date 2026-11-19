@@ -25,6 +25,7 @@ class NpmWizardTest extends TestCase
 
         $this->admin();
         $this->npm = FakeNpm::install();
+        \App\Npm\NpmAuto::setEnabled(false); // these tests are about the guided, hand-applied sync
         Connection::save(FakeNpm::URL, 'npm@example.com', 'npm-secret', true);
     }
 

@@ -35,7 +35,7 @@
                         <label>Public domains <span class="hint">optional; names reachable from the internet, each with its own NPM proxy host</span></label>
                         @include('partials.listedit', ['name' => 'public_domains', 'values' => old('public_domains', $names['public']), 'placeholder' => 'wiki.'.($publicDefault ?? 'example.org'), 'addLabel' => 'Add public domain', 'suffix' => $publicDefault, 'slugFrom' => 'name'])
                         @unless ($publicDefault || $localDefault)
-                            <small class="hint">Set your domains under Settings > General to get a suggested name when you click Add.</small>
+                            <small class="hint">Set your domains on the Nginx Proxy Manager page to get a suggested name when you click Add.</small>
                         @endunless
                     </div>
                 </div>

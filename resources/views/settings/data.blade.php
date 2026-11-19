@@ -13,7 +13,7 @@
             <label class="check">
                 <input type="checkbox" name="suggest_domains" value="1" @disabled(! \App\Support\DomainSuggestions::available())>
                 <span>Suggest a local domain for every service and server that has none
-                    <span class="hint">built from its name under your default local domain{{ \App\Support\DomainSuggestions::available() ? ' ('.\App\Support\Domains::defaultFor('local').')' : '; set one under Settings > General first' }}. Off by default; the file only, nothing is saved.</span></span>
+                    <span class="hint">built from its name under your default local domain{{ \App\Support\DomainSuggestions::available() ? ' ('.\App\Support\Domains::defaultFor('local').')' : '; set one on the Nginx Proxy Manager page first' }}. Off by default; the file only, nothing is saved.</span></span>
             </label>
             <button class="btn btn-primary" type="submit">Download labman.yml</button>
         </form>

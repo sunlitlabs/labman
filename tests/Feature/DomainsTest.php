@@ -174,22 +174,20 @@ class DomainsTest extends TestCase
             ['id' => 7, 'nice_name' => 'Cloudflare', 'domain_names' => ['example.org', '*.example.org']],
         ];
 
-        $this->actingAs(\App\Models\User::where('role', 'admin')->first())->get('/settings')->assertOk()
+        $this->actingAs(\App\Models\User::where('role', 'admin')->first())->get('/npm')->assertOk()
             ->assertSee('Local wildcard')->assertSee('Cloudflare')->assertSee('Local domains');
     }
 
-    public function test_the_settings_form_saves_the_domains(): void
+    public function test_the_npm_page_saves_the_domains(): void
     {
         $admin = $this->admin();
 
-        $this->actingAs($admin)->put('/settings', ['section' => 'general', 'title' => 'LabMan', 'check_interval' => 30, 'timeout' => 4, 'ssh_target' => 'address', 'ssh_user' => '',
-            'icons' => 1, 'local_domains' => 'home.example.com', 'public_domains' => 'example.org', 'npm_cert_local' => '', 'npm_cert_public' => ''])
-            ->assertSessionHasNoErrors();
+        $this->actingAs($admin)->put('/npm/domains', ['local_domains' => 'home.example.com', 'public_domains' => 'example.org', 'npm_cert_local' => '', 'npm_cert_public' => ''])
+            ->assertSessionHasNoErrors()->assertRedirect(route('npm.index'));
 
         $this->assertSame(['home.example.com'], Domains::local());
 
-        $this->actingAs($admin)->put('/settings', ['section' => 'general', 'title' => 'LabMan', 'check_interval' => 30, 'timeout' => 4, 'ssh_target' => 'address',
-            'local_domains' => 'bad_domain!'])->assertSessionHasErrors('local_domains');
+        $this->actingAs($admin)->put('/npm/domains', ['local_domains' => 'bad_domain!'])->assertSessionHasErrors('local_domains');
     }
 
     public function test_the_service_form_validates_the_public_domain(): void

@@ -66,6 +66,7 @@ final class Connection
     public static function forget(): void
     {
         Setting::query()->whereIn('key', self::KEYS)->delete();
+        NpmAuto::forget();
     }
 
     /**

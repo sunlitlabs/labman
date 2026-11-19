@@ -84,6 +84,8 @@ Route::middleware('admin')->group(function () {
     Route::get('/npm', [NpmController::class, 'index'])->name('npm.index');
     Route::post('/npm/connection', [NpmController::class, 'connect'])->name('npm.connect');
     Route::delete('/npm/connection', [NpmController::class, 'disconnect'])->name('npm.disconnect');
+    Route::put('/npm/domains', [NpmController::class, 'domains'])->name('npm.domains');
+    Route::post('/npm/auto', [NpmController::class, 'auto'])->name('npm.auto');
     Route::get('/npm/wizard', [NpmController::class, 'wizard'])->name('npm.wizard');
     Route::post('/npm/wizard', [NpmController::class, 'wizardApply'])->name('npm.wizard.apply');
     Route::get('/npm/import', [NpmController::class, 'importPreview'])->name('npm.import');
