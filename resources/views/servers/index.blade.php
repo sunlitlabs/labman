@@ -45,7 +45,7 @@
                                 @forelse ($names as $name)<span class="dom">{{ $name }}</span>@empty — @endforelse
                             </div>
                             <div class="cell addr">
-                                <span class="mono">{{ $server->address }}</span>
+                                <a class="mono" href="{{ $server->addressUrl() }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->address }}">{{ $server->address }}</a>
                                 <small class="mono">{{ $ssh }} <span class="ssh-hint">click to copy</span></small>
                             </div>
                             @include('partials.detail', ['item' => $server])

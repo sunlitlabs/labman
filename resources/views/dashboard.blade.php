@@ -69,12 +69,15 @@
                         @php($bad = collect($st['checks'])->firstWhere('ok', false))
                         <article class="tile {{ $open ? 'clickable' : '' }}" data-kind="services" data-id="{{ $service->id }}" data-state="{{ $st['state'] }}"
                                  @if ($open) data-href="{{ $open }}" tabindex="0" role="link" aria-label="Open {{ $service->name }}" @endif
-                                 data-filter="{{ strtolower(implode(' ', [$service->name, $service->domain, $service->group, $service->notes])) }}">
+                                 data-filter="{{ strtolower(implode(' ', [$service->name, $service->domain, $service->public_domain, $service->backendAddress(), $service->group, $service->notes])) }}">
                             @include('partials.icon', ['model' => $service])
                             <div class="tile-body">
                                 <span class="tile-name">{{ $service->name }}</span>
                                 <small class="tile-sub">{{ $service->domain ?: $service->public_domain ?: ($service->backendAddress() ? \App\Support\Hosts::forUrl($service->backendAddress()).':'.$service->effectivePort() : 'no address') }}</small>
                                 <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
+                                @if ($service->backendUrl() && ($service->domain || $service->public_domain))
+                                    <a class="tile-ip mono" href="{{ $service->backendUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the backend directly, bypassing the domain name">{{ \App\Support\Hosts::forUrl($service->backendAddress()) }}:{{ $service->effectivePort() }}</a>
+                                @endif
                                 @if ($service->domain && $service->public_domain)
                                     <a class="tile-public" href="{{ $service->publicDomainUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the public address">{{ $service->public_domain }}</a>
                                 @endif
@@ -102,7 +105,7 @@
                             @include('partials.icon', ['model' => $server])
                             <div class="tile-body">
                                 <span class="tile-name">{{ $server->name }}</span>
-                                <small class="tile-sub mono">{{ $server->address }}</small>
+                                <a class="tile-sub mono" href="{{ $server->addressUrl() }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->address }}">{{ $server->address }}</a>
                                 <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
                             </div>
                             <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>

@@ -497,3 +497,6 @@ details.formcard > summary { cursor: pointer; font-weight: 600; }
 .notices { display: grid; gap: 8px; margin-bottom: 14px; }
 .notice-bar { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--border); border-left: 4px solid var(--degraded, #d9a400); border-radius: 8px; background: var(--card, var(--bg)); }
 .notice-bar form { margin: 0; }
+
+.tile-ip { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-ip:hover, a.tile-sub:hover { color: var(--accent); }

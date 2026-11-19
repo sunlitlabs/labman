@@ -49,7 +49,9 @@
                                 @endforelse
                                 @if (! $names['local'] && ! $names['public']) — @endif
                             </div>
-                            <div class="cell addr mono">{{ $backend }}</div>
+                            <div class="cell addr mono">
+                                @if ($service->backendUrl())<a href="{{ $service->backendUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the backend directly, bypassing the domain name">{{ $backend }}</a>@else{{ $backend }}@endif
+                            </div>
                             @include('partials.detail', ['item' => $service])
                             <div class="cell actions">
                                 @can('admin')<a href="{{ route('services.edit', $service) }}">Edit</a>@endcan

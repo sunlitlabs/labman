@@ -31,6 +31,12 @@ class Server extends Model
         ];
     }
 
+    /** http://<address>, to open the machine's own web page (its IP stays reachable when a name or DNS is the problem). */
+    public function addressUrl(): string
+    {
+        return 'http://'.\App\Support\Hosts::forUrl($this->address);
+    }
+
     public function services(): HasMany
     {
         return $this->hasMany(Service::class);
