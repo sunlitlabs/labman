@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Semaphore')
 
@@ -6,7 +6,7 @@
     $pill = fn ($status) => match ($status) { 'success' => 'up', 'error' => 'down', 'stopped' => 'degraded', default => 'unknown' };
 @endphp
 
-@section('content')
+@section('admin')
     <h1>Semaphore</h1>
     <p class="muted">
         Run your Ansible playbooks (Semaphore templates) from here. Every run is shown to you and needs an explicit
@@ -96,7 +96,7 @@
         <h2>{{ $connection ? 'Change connection' : 'Connect' }}</h2>
         <div class="grid2">
             <div class="field">
-                <label for="url">Semaphore address <span class="hint">usually port 3000</span></label>
+                <label for="url">Semaphore address <span class="hint">paste any Semaphore page, e.g. http://192.0.2.7:3000/project/1/templates</span></label>
                 <input id="url" name="url" type="text" required placeholder="http://192.0.2.7:3000" value="{{ old('url', $connection['url'] ?? '') }}">
             </div>
             <div class="field">

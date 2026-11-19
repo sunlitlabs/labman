@@ -91,7 +91,7 @@ class NpmTest extends TestCase
         $this->actingAs($this->admin);
         $good = ['url' => 'http://npm.test:81', 'email' => 'npm@example.com', 'password' => 'npm-secret'];
 
-        foreach (['ftp://npm.test:81', 'http://npm.test:81/admin', 'http://user:pw@npm.test:81', 'npm.test', 'http://bad host:81', 'javascript:alert(1)'] as $url) {
+        foreach (['ftp://npm.test:81', 'http://user:pw@npm.test:81', 'npm.test', 'http://bad host:81', 'javascript:alert(1)'] as $url) {
             $this->post('/npm/connection', ['url' => $url] + $good)->assertSessionHasErrors('url');
         }
 

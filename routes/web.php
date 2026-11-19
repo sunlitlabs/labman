@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -34,7 +35,9 @@ Route::get('/status', StatusController::class)->name('status');
 // Read screens: visibility is configurable per screen.
 Route::get('/services', [ServiceController::class, 'index'])->name('services.index')->middleware('screen:services');
 Route::get('/servers', [ServerController::class, 'index'])->name('servers.index')->middleware('screen:servers');
-Route::get('/settings', [SettingsController::class, 'show'])->name('settings.index')->middleware('screen:settings');
+Route::get('/admin', [AdminController::class, 'index'])->name('admin.index')->middleware('admin.area');
+Route::get('/settings', [SettingsController::class, 'general'])->name('settings.index')->middleware('screen:settings');
+Route::get('/settings/access', [SettingsController::class, 'access'])->name('settings.access')->middleware('screen:settings');
 Route::get('/users', [UserController::class, 'index'])->name('users.index')->middleware('screen:users');
 
 // Everything that changes data is admin-only, regardless of visibility.
@@ -47,6 +50,7 @@ Route::middleware('admin')->group(function () {
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::post('/inventory/connection', [InventoryController::class, 'connect'])->name('inventory.connect');
     Route::delete('/inventory/connection', [InventoryController::class, 'disconnect'])->name('inventory.disconnect');
+    Route::get('/inventory/parse-link', [InventoryController::class, 'parseLink'])->name('inventory.parse');
     Route::get('/inventory/compare', [InventoryController::class, 'compare'])->name('inventory.compare');
     Route::post('/inventory/review', [InventoryController::class, 'review'])->name('inventory.review');
     Route::post('/inventory/apply', [InventoryController::class, 'apply'])->name('inventory.apply');
@@ -72,7 +76,9 @@ Route::middleware('admin')->group(function () {
     Route::post('/settings/tokens', [ApiTokenController::class, 'store'])->name('tokens.store');
     Route::delete('/settings/tokens/{token}', [ApiTokenController::class, 'destroy'])->name('tokens.destroy');
 
-    Route::put('/settings',[SettingsController::class, 'update'])->name('settings.update');
+    Route::get('/settings/data', [SettingsController::class, 'data'])->name('settings.data');
+    Route::get('/settings/mcp', [SettingsController::class, 'mcp'])->name('settings.mcp');
+    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
     Route::post('/settings/import', [SettingsController::class, 'import'])->name('settings.import');
     Route::get('/settings/export', [SettingsController::class, 'export'])->name('settings.export');
 });

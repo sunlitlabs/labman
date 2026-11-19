@@ -12,22 +12,49 @@ use Illuminate\Validation\ValidationException;
 
 class SettingsController extends Controller
 {
-    /** Read-only for non-admins who are allowed to see the screen (the view disables the form). */
-    public function show(Request $request)
+    /** General settings. Read-only for non-admins who are allowed to see the screen (the view disables the form). */
+    public function general()
     {
-        return view('settings', [
-            'values' => Settings::all(),
-            'tokens' => $request->user()?->isAdmin() ? ApiToken::with('user')->orderBy('id')->get() : collect(),
-        ]);
+        return view('settings.general', ['values' => Settings::all()]);
     }
 
+    public function access()
+    {
+        return view('settings.access', ['values' => Settings::all(), 'levels' => config('labman.visibility_levels')]);
+    }
+
+    public function data()
+    {
+        return view('settings.data');
+    }
+
+    public function mcp()
+    {
+        return view('settings.mcp', ['tokens' => ApiToken::with('user')->orderBy('id')->get()]);
+    }
+
+    /**
+     * Each settings page saves only its own fields (`section`), merged over the current settings.
+     * Posting every field without a section (older clients, scripts) still works.
+     */
     public function update(Request $request)
     {
-        SettingsInput::save($request->validate(SettingsInput::rules()));
+        $sections = [
+            'general' => ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target'],
+            'access' => ['registration_mode', 'visibility'],
+        ];
 
-        return redirect()->route('settings.index')->with('status', 'Settings saved.');
+        $section = $request->input('section');
+        $rules = SettingsInput::rules();
+
+        if (isset($sections[$section])) {
+            $rules = array_filter($rules, fn ($key) => in_array(explode('.', $key)[0], $sections[$section], true), ARRAY_FILTER_USE_KEY);
+        }
+
+        SettingsInput::update($request->validate($rules));
+
+        return redirect()->route($section === 'access' ? 'settings.access' : 'settings.index')->with('status', 'Settings saved.');
     }
-
     public function import(Request $request)
     {
         $request->validate([
@@ -49,7 +76,7 @@ class SettingsController extends Controller
 
         $result = YamlConfig::import($config, $request->boolean('replace'));
 
-        return redirect()->route('settings.index')->with('status', sprintf(
+        return redirect()->route('settings.data')->with('status', sprintf(
             'Imported %d server(s) and %d service(s)%s.',
             $result['servers'], $result['services'], $result['removed'] ? "; removed {$result['removed']} not in the file" : '',
         ));

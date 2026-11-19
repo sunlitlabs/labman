@@ -8,6 +8,25 @@ use InvalidArgumentException;
 final class BaseUrl
 {
     /**
+     * Like clean(), but forgiving: whatever page of the service was pasted (http://host:81/nginx/proxy), only
+     * the address up to the port is kept. Credentials in the URL are still refused.
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function origin(string $url, string $example = 'http://192.0.2.5:81'): string
+    {
+        $parts = parse_url(trim($url));
+
+        if ($parts === false || ! isset($parts['scheme'], $parts['host'])) {
+            return self::clean($url, $example); // let clean() explain what is wrong
+        }
+
+        $auth = isset($parts['user']) ? $parts['user'].(isset($parts['pass']) ? ':'.$parts['pass'] : '').'@' : '';
+
+        return self::clean($parts['scheme'].'://'.$auth.$parts['host'].(isset($parts['port']) ? ':'.$parts['port'] : ''), $example);
+    }
+
+    /**
      * Normalise `http(s)://host[:port]`: a valid host name or IP, optional port, no credentials,
      * no query or fragment, and (unless $allowPath) no path. Returns the cleaned URL without a trailing slash.
      *

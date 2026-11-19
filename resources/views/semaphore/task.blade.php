@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Run #'.$taskId)
 
@@ -9,7 +9,11 @@
 
 @section('body_attrs')data-task-url="{{ route('semaphore.task.status', [$project, $taskId]) }}" data-task-total="{{ count($output) }}" data-task-finished="{{ $finished ? '1' : '0' }}"@endsection
 
-@section('content')
+@section('focus', '1')
+@section('crumb', 'Semaphore')
+@section('crumb_url', route('semaphore.index'))
+
+@section('admin')
     <div class="toolbar">
         <h1>Run #{{ $taskId }}</h1>
         <span id="task-status" class="pill pill-{{ $pill($status) }}">{{ $status }}</span>

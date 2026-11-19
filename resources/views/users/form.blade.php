@@ -1,8 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', $user->exists ? 'Edit user' : 'Add user')
 
-@section('content')
+@section('admin')
     <div class="wide">
         <h1>{{ $user->exists ? 'Edit user' : 'Add user' }}</h1>
 

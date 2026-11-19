@@ -454,7 +454,7 @@ class McpTest extends TestCase
         $this->rpc('ping', [], $m[0])->assertOk();
 
         // The settings page lists it by prefix only, never the full token.
-        $this->get('/settings')->assertOk()->assertSee('Laptop')->assertSee(substr($m[0], 0, 8))->assertDontSee($m[0]);
+        $this->get('/settings/mcp')->assertOk()->assertSee('Laptop')->assertSee(substr($m[0], 0, 8))->assertDontSee($m[0]);
         $this->assertSame(0, DB::table('sessions')->where('payload', 'like', '%'.$m[0].'%')->count());
     }
 
@@ -467,7 +467,7 @@ class McpTest extends TestCase
         $this->actingAs($this->admin)->post('/settings/tokens', ['name' => 'x', 'scope' => 'banana'])->assertSessionHasErrors('scope');
 
         $token = ApiToken::findByPlain($this->readToken);
-        $this->actingAs($this->admin)->delete("/settings/tokens/{$token->id}")->assertRedirect(route('settings.index'));
+        $this->actingAs($this->admin)->delete("/settings/tokens/{$token->id}")->assertRedirect(route('settings.mcp'));
         $this->rpc('ping', [], $this->readToken)->assertUnauthorized();
     }
 
@@ -475,6 +475,7 @@ class McpTest extends TestCase
     {
         Settings::set(['visibility.settings' => 'users']);
 
-        $this->actingAs($this->user())->get('/settings')->assertOk()->assertDontSee('MCP access')->assertDontSee('test admin');
+        $this->actingAs($this->user())->get('/settings')->assertOk()->assertDontSee('API tokens')->assertDontSee('test admin');
+        $this->get('/settings/mcp')->assertForbidden();
     }
 }

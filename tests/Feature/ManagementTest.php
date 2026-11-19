@@ -259,14 +259,14 @@ class ManagementTest extends TestCase
     public function test_yaml_import_through_the_settings_page(): void
     {
         $this->post('/settings/import', ['yaml' => (string) file_get_contents(base_path('labman.example.yml'))])
-            ->assertRedirect(route('settings.index'));
+            ->assertRedirect(route('settings.data'));
         $this->assertSame(2, Server::count());
 
         $this->post('/settings/import', ['yaml' => "servers:\n  - {name: x}\nservices: []\n"])
             ->assertSessionHasErrors('yaml');
 
         $file = UploadedFile::fake()->createWithContent('lab.yml', "servers:\n  - {name: only, address: 192.0.2.77}\nservices: []\n");
-        $this->post('/settings/import', ['yaml_file' => $file, 'replace' => 1])->assertRedirect(route('settings.index'));
+        $this->post('/settings/import', ['yaml_file' => $file, 'replace' => 1])->assertRedirect(route('settings.data'));
         $this->assertSame(['only'], Server::pluck('name')->all());
     }
 

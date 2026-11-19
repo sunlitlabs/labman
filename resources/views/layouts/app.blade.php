@@ -22,16 +22,8 @@
             @can('view-screen', 'servers')
                 <a href="{{ route('servers.index') }}" @if(request()->routeIs('servers.*')) aria-current="page" @endif>Servers</a>
             @endcan
-            @can('view-screen', 'settings')
-                <a href="{{ route('settings.index') }}" @if(request()->routeIs('settings.*')) aria-current="page" @endif>Settings</a>
-            @endcan
-            @can('view-screen', 'users')
-                <a href="{{ route('users.index') }}" @if(request()->routeIs('users.*')) aria-current="page" @endif>Users</a>
-            @endcan
-            @can('admin')
-                <a href="{{ route('inventory.index') }}" @if(request()->routeIs('inventory.*')) aria-current="page" @endif>Inventory</a>
-                <a href="{{ route('semaphore.index') }}" @if(request()->routeIs('semaphore.*')) aria-current="page" @endif>Semaphore</a>
-                <a href="{{ route('npm.index') }}" @if(request()->routeIs('npm.*')) aria-current="page" @endif>NPM</a>
+            @can('view-admin')
+                <a href="{{ route('admin.index') }}" @if(request()->routeIs(\App\Support\AdminNav::ROUTES)) aria-current="page" @endif>Admin</a>
             @endcan
         </nav>
         <div class="who">

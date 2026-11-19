@@ -28,6 +28,6 @@ class ApiTokenController extends Controller
     {
         $token->delete();
 
-        return redirect()->route('settings.index')->with('status', "Token '{$token->name}' revoked.");
+        return redirect()->route('settings.mcp')->with('status', "Token '{$token->name}' revoked.");
     }
 }

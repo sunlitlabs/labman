@@ -9,6 +9,18 @@ Plus a filter box (press `/`), a status summary, light/dark theme that follows y
 
 > Status: v0.3. Configure it in the admin UI or a YAML file, let an AI assistant manage it over [MCP](#mcp-model-context-protocol), sync with [Nginx Proxy Manager](#nginx-proxy-manager), keep your Ansible [inventory](#inventory-sync-ansible-and-semaphore) in git lined up with your servers, and run playbooks through [Semaphore](#semaphore) (always with a preview or a confirmation).
 
+## The admin panel
+
+Everything that configures LabMan lives in one **Admin** area, apart from the pages you look at every day (Services and Servers). The sidebar groups it:
+
+| Group | Pages |
+|---|---|
+| Site | **Overview** (status of everything, accounts waiting for approval), **General** (title, health-check timing, Copy SSH defaults), **Access** (registration and who may see each page), **Users** |
+| Integrations | **Inventory (Ansible)**, **Semaphore**, **Nginx Proxy Manager**, each with a connected / not connected dot |
+| Tools | **AI access (MCP)** (API tokens), **Import and export** (YAML) |
+
+Step-by-step workflows (comparing the inventory, reviewing a run, reviewing an NPM push) hide the sidebar and show a breadcrumb so they get the full width. People who are allowed to *see* the Settings or Users pages (see [Roles and visibility](#roles-and-visibility)) get a read-only version of those pages; everything else in the panel is admin-only.
+
 ## Quick start
 
 You need Docker with the Compose plugin.
@@ -77,7 +89,7 @@ docker compose exec labman php artisan labman:import /data/labman.yml --replace
 docker compose exec labman php artisan labman:export /data/labman.yml
 ```
 
-The same import/export is available under **Settings** in the UI and in the setup wizard. A complete, commented example with placeholder data is in [`labman.example.yml`](labman.example.yml):
+The same import/export is available under **Admin > Import and export** and in the setup wizard. A complete, commented example with placeholder data is in [`labman.example.yml`](labman.example.yml):
 
 ```yaml
 settings:
@@ -135,7 +147,7 @@ Two token scopes:
 
 ## Nginx Proxy Manager
 
-Connect LabMan to your Nginx Proxy Manager (NPM) under **NPM** (admins only; tested against NPM 2.17). Enter the NPM admin address (usually port 81), an NPM user's e-mail and password, and LabMan logs in to prove it works. Use a dedicated NPM user; accounts with two-factor authentication are not supported. The login is stored **encrypted with the application key** in `/data`, and is never displayed again, exported to YAML, or returned by an MCP tool.
+Connect LabMan to your Nginx Proxy Manager (NPM) under **Admin > Nginx Proxy Manager** (tested against NPM 2.17). Paste any page of NPM's web UI (the address is cut back to host and port), enter an NPM user's e-mail and password, and LabMan logs in to prove it works. NPM has an API but no permanent API keys: it issues short-lived tokens in exchange for an account's e-mail and password, which is why LabMan has to keep the login (encrypted). Create a dedicated NPM user for it with permission to manage proxy hosts only. Use a dedicated NPM user; accounts with two-factor authentication are not supported. The login is stored **encrypted with the application key** in `/data`, and is never displayed again, exported to YAML, or returned by an MCP tool.
 
 Everything is **preview first, then apply what you tick**:
 
@@ -150,7 +162,7 @@ The same two-step flow is available to MCP clients (`npm_import_preview` / `npm_
 
 If Semaphore (or plain Ansible) reads its inventory from a git repository, LabMan can keep that inventory and its own servers lined up. LabMan reads the inventory file, compares it with your servers and shows, in one screen, what matches and what does not. You decide, item by item, what to change on either side.
 
-Connect under **Inventory**: the repository's https address, the branch, the inventory file path, and a **personal access token** with read and write access to the repository contents. LabMan clones the repository, finds the file and reads it before saving. The token is stored encrypted, passed to git only through the environment of a single process (never in a URL, a command line, the git config or a file), and is never shown, exported or sent to an MCP client.
+Connect under **Admin > Inventory (Ansible)** with just two things: a **link to your inventory file** and a **personal access token** with read and write access to the repository contents. Paste the address from your browser, for example `https://github.com/your-org/your-repo/blob/main/ansible/inventory/hosts.ini`, and LabMan works out the repository, branch and file path as you paste (GitHub, GitLab, Gitea, Forgejo, Codeberg and Bitbucket links work, and so do plain repository addresses and `git@host:org/repo.git` clone addresses). A branch name that itself contains a slash (`release/1.0`) cannot be told apart from a folder in a web link: enter that one under Details. You do not need to know the git user name either: LabMan uses the host's convention (`x-access-token` for GitHub, `oauth2` for GitLab, `x-token-auth` for Bitbucket) and, for self-hosted hosts, asks the host's API who owns the token; it tells you which name it ended up using. LabMan clones the repository, finds the file and reads it before saving. The token is stored encrypted, passed to git only through the environment of a single process (never in a URL, a command line, the git config or a file), and is never shown, exported or sent to an MCP client.
 
 **Compare** pulls the latest commit and sorts everything into four groups:
 
@@ -171,7 +183,7 @@ Limits: one inventory file; LabMan creates groups for LabMan groups (named like 
 
 ## Semaphore
 
-Under **Semaphore** LabMan connects to your [Semaphore](https://semaphoreui.com) with an **API token** (stored encrypted, never shown) and can list projects and templates (playbooks), run a template, follow the run live and stop it. It never creates or edits Semaphore's own configuration (keys, inventories, templates, repositories).
+Under **Admin > Semaphore** LabMan connects to your [Semaphore](https://semaphoreui.com) (paste any page of its web UI; the address is cut back to host and port) with an **API token** (stored encrypted, never shown) and can list projects and templates (playbooks), run a template, follow the run live and stop it. It never creates or edits Semaphore's own configuration (keys, inventories, templates, repositories).
 
 Running is always three steps, in the UI and over MCP:
 
@@ -226,6 +238,7 @@ Three kinds of visitor: **guest**, **user**, **admin**. For each of the four scr
 |---|---|
 | Health engine | `app/Monitoring`: `TcpProbe`, `HealthChecker`, `Verdict` (pure state logic), `StatusView` |
 | YAML config | `app/Config/YamlConfig.php` |
+| Admin panel | `app/Support/AdminNav.php` (sidebar model), `AdminController` (overview), `resources/views/layouts/admin.blade.php` |
 | Access rules | `app/Support/Access.php`, middleware `screen:` and `admin`, gates `view-screen` / `admin` |
 | Setup wizard | `app/Http/Controllers/SetupController.php`, middleware `RedirectToSetup` |
 | Shared validation | `app/Domain` (`ServerInput`, `ServiceInput`, `SettingsInput`, `UserAdmin`): used by the forms **and** the MCP tools |

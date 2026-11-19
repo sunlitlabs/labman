@@ -77,7 +77,7 @@ final class Connection
     public static function cleanUrl(string $url): string
     {
         try {
-            return \App\Support\BaseUrl::clean($url, 'http://192.0.2.5:81');
+            return \App\Support\BaseUrl::origin($url, 'http://192.0.2.5:81');
         } catch (\InvalidArgumentException $e) {
             throw new NpmException($e->getMessage());
         }

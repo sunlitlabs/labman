@@ -1,8 +1,12 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Review inventory changes')
 
-@section('content')
+@section('focus', '1')
+@section('crumb', 'Inventory')
+@section('crumb_url', route('inventory.index'))
+
+@section('admin')
     <h1>Review before anything is written</h1>
     <p class="muted">
         This is exactly what will happen. The inventory commit is pushed first; LabMan is only updated if the push succeeds.

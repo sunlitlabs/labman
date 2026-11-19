@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Compare inventory')
 
@@ -12,7 +12,11 @@
     $needsWork = count($plan['differences']) + count($plan['only_labman']) + count($plan['only_inventory']);
 @endphp
 
-@section('content')
+@section('focus', '1')
+@section('crumb', 'Inventory')
+@section('crumb_url', route('inventory.index'))
+
+@section('admin')
     <div class="toolbar">
         <h1>Compare LabMan and the inventory</h1>
         <a class="btn" href="{{ route('inventory.compare') }}">Pull latest and compare again</a>

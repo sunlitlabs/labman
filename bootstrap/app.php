@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'screen' => EnsureScreenAccess::class,
             'admin' => EnsureAdmin::class,
+            'admin.area' => \App\Http\Middleware\EnsureAdminArea::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

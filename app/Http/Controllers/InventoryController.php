@@ -7,6 +7,8 @@ use App\Inventory\Connector;
 use App\Inventory\InventoryException;
 use App\Inventory\InventorySync;
 use App\Inventory\RepoConfig;
+use App\Inventory\RepoUrl;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -22,13 +24,13 @@ class InventoryController extends Controller
     public function connect(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'repo_url' => ['required', 'string', 'max:300'],
-            'branch' => ['required', 'string', 'max:100'],
-            'path' => ['required', 'string', 'max:200'],
-            'username' => ['required', 'string', 'max:100'],
+            'repo_url' => ['required', 'string', 'max:500'],
+            'branch' => ['nullable', 'string', 'max:100'],
+            'path' => ['nullable', 'string', 'max:200'],
+            'username' => ['nullable', 'string', 'max:100'],
             'token' => ['nullable', 'string', 'max:500'],
-            'author_name' => ['required', 'string', 'max:100'],
-            'author_email' => ['required', 'string', 'max:100'],
+            'author_name' => ['nullable', 'string', 'max:100'],
+            'author_email' => ['nullable', 'string', 'max:100'],
         ]);
 
         try {
@@ -38,12 +40,21 @@ class InventoryController extends Controller
             $field = match (true) {
                 str_starts_with($message, 'Enter the access token') => 'token',
                 str_starts_with($message, 'The git user name') => 'username',
+                str_starts_with($message, 'Which file') || str_contains($message, 'does not exist on branch') || str_contains($message, 'inventory file path') => 'path',
                 default => 'repo_url',
             };
             throw ValidationException::withMessages([$field => $message]);
         }
 
-        return redirect()->route('inventory.index')->with('status', 'Connected. Read '.$result['hosts'].' host(s) from '.$result['path'].'.');
+        return redirect()->route('inventory.index')->with('status', 'Connected as '.$result['username'].'. Read '.$result['hosts'].' host(s) from '.$result['path'].'.');
+    }
+
+    /** Fills the connection form from a pasted link (called by the form's script as you paste). */
+    public function parseLink(Request $request): JsonResponse
+    {
+        $parsed = RepoUrl::parse((string) $request->query('url', ''));
+
+        return response()->json($parsed === null ? ['ok' => false] : ['ok' => true] + $parsed)->header('Cache-Control', 'no-store');
     }
 
     public function disconnect(): RedirectResponse

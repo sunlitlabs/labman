@@ -80,6 +80,10 @@ final class Connection
     public static function cleanUrl(string $url): string
     {
         try {
+            // A pasted page of Semaphore's UI (.../project/1/templates, .../auth/login) is cut back to its address.
+            $url = (string) preg_replace('~[?#].*$~', '', trim($url));
+            $url = (string) preg_replace('~/(project|auth)(/.*)?$~', '', $url);
+
             return BaseUrl::clean($url, 'http://192.0.2.7:3000', allowPath: true);
         } catch (\InvalidArgumentException $e) {
             throw new SemaphoreException($e->getMessage());

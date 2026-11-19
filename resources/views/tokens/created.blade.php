@@ -1,8 +1,12 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'API token created')
 
-@section('content')
+@section('focus', '1')
+@section('crumb', 'AI access (MCP)')
+@section('crumb_url', route('settings.mcp'))
+
+@section('admin')
     <div class="wide">
         <h1>API token created</h1>
         <div class="flash" role="status">
@@ -28,7 +32,7 @@
                 <p class="hint">A read token can only list services and servers, read health and settings, and export the YAML.</p>
             @endif
 
-            <a class="btn btn-primary" href="{{ route('settings.index') }}">Done</a>
+            <a class="btn btn-primary" href="{{ route('settings.mcp') }}">Done</a>
         </div>
     </div>
 @endsection

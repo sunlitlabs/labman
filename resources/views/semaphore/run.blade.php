@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Run template')
 
@@ -7,7 +7,11 @@
     $oldGroups = (array) ($old['groups'] ?? []);
 @endphp
 
-@section('content')
+@section('focus', '1')
+@section('crumb', 'Semaphore')
+@section('crumb_url', route('semaphore.index'))
+
+@section('admin')
     <div class="wide">
         <h1>Run: {{ $template['name'] }}</h1>
         <p class="muted"><span class="mono">{{ $template['playbook'] ?? '' }}</span>@if (! empty($template['description'])) · {{ $template['description'] }}@endif</p>

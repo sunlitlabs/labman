@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @php
     $isImport = $mode === 'import';
@@ -7,7 +7,11 @@
 
 @section('title', $isImport ? 'Preview NPM import' : 'Preview NPM push')
 
-@section('content')
+@section('focus', '1')
+@section('crumb', 'Nginx Proxy Manager')
+@section('crumb_url', route('npm.index'))
+
+@section('admin')
     <h1>{{ $isImport ? 'Import from NPM' : 'Push to NPM' }}: preview</h1>
     <p class="muted">
         @if ($isImport)

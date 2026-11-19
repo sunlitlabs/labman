@@ -1,8 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Users')
 
-@section('content')
+@section('admin')
     <div class="toolbar">
         <h1>Users</h1>
         @can('admin')

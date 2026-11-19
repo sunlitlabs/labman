@@ -25,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
         // 120 MCP calls a minute per token (or per IP for unauthenticated attempts).
         RateLimiter::for('mcp', fn (Request $request) => Limit::perMinute(120)->by(($request->bearerToken() ? 't'.substr(hash('sha256', $request->bearerToken()), 0, 16) : 'ip').'|'.$request->ip()));
 
+        // May this viewer open the admin panel at all (admins, or anyone allowed to see Settings or Users)?
+        Gate::define('view-admin', fn (?User $user) => \App\Support\AdminNav::canEnter($user));
+
         // Editing anything is admin-only.
         Gate::define('admin', fn (?User $user) => Access::isAdmin($user));
     }

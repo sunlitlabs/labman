@@ -1,8 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Nginx Proxy Manager')
 
-@section('content')
+@section('admin')
     <h1>Nginx Proxy Manager</h1>
     <p class="muted">
         Import proxy hosts as services, or push LabMan's services back to NPM. Every change is previewed first and
@@ -47,7 +47,7 @@
         <h2>{{ $connection ? 'Change connection' : 'Connect' }}</h2>
         <div class="grid2">
             <div class="field">
-                <label for="url">NPM admin address <span class="hint">usually port 81</span></label>
+                <label for="url">NPM address <span class="hint">paste any NPM page, e.g. http://192.0.2.5:81/nginx/proxy</span></label>
                 <input id="url" name="url" type="text" required placeholder="http://192.0.2.5:81" value="{{ old('url', $connection['url'] ?? '') }}">
             </div>
             <div class="field">
@@ -64,7 +64,11 @@
             <input type="checkbox" name="verify_tls" value="1" @checked(old('verify_tls', $connection['verify_tls'] ?? true))>
             Verify the TLS certificate (untick for a self-signed https address)
         </label>
-        <p class="hint">Use a dedicated NPM user that can manage proxy hosts. Accounts with two-factor authentication are not supported.</p>
+        <p class="hint">
+            NPM has an API, but no permanent API keys: it hands out short-lived tokens in exchange for an account's e-mail and password,
+            so LabMan keeps that login (encrypted) and signs in each time. Create a dedicated NPM user for LabMan with permission to
+            manage proxy hosts only. Accounts with two-factor authentication are not supported.
+        </p>
         <button class="primary" type="submit">Test and save</button>
     </form>
 @endsection

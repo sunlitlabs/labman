@@ -1,8 +1,12 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Confirm run')
 
-@section('content')
+@section('focus', '1')
+@section('crumb', 'Semaphore')
+@section('crumb_url', route('semaphore.index'))
+
+@section('admin')
     <div class="wide">
         <h1>Confirm the run</h1>
 

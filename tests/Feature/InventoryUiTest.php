@@ -80,20 +80,20 @@ class InventoryUiTest extends TestCase
         $this->actingAs($this->admin);
 
         config(['labman.git.allow_local' => false]);
-        foreach (['ssh://git@example.com/x.git', 'https://u:p@example.com/x.git', '/tmp/x', 'file:///tmp/x', 'https://example.com'] as $url) {
+        foreach (['https://u:p@example.com/x.git', '/tmp/x', 'file:///tmp/x', 'https://example.com', 'ftp://example.com/x.git'] as $url) {
             $this->post('/inventory/connection', $this->form(['repo_url' => $url]))->assertSessionHasErrors('repo_url');
         }
         config(['labman.git.allow_local' => true]);
 
-        $this->post('/inventory/connection', $this->form(['path' => '../etc/passwd']))->assertSessionHasErrors('repo_url');
+        $this->post('/inventory/connection', $this->form(['path' => '../etc/passwd']))->assertSessionHasErrors('path');
         $this->post('/inventory/connection', $this->form(['branch' => 'a..b']))->assertSessionHasErrors('repo_url');
         $this->post('/inventory/connection', $this->form(['token' => '']))->assertSessionHasErrors('token');
         $this->post('/inventory/connection', $this->form(['username' => 'bad user!']))->assertSessionHasErrors('username');
         $this->post('/inventory/connection', $this->form(['author_email' => "a\nb"]))->assertSessionHasErrors('repo_url');
 
-        $this->post('/inventory/connection', $this->form(['path' => 'wrong/file.yml']))->assertSessionHasErrors('repo_url');
-        $this->assertStringContainsString("'wrong/file.yml' does not exist", session('errors')->first('repo_url'));
-        $this->assertStringContainsString('inventory/hosts.yml', session('errors')->first('repo_url'), 'inventory-like files are suggested');
+        $this->post('/inventory/connection', $this->form(['path' => 'wrong/file.yml']))->assertSessionHasErrors('path');
+        $this->assertStringContainsString("'wrong/file.yml' does not exist", session('errors')->first('path'));
+        $this->assertStringContainsString('inventory/hosts.yml', session('errors')->first('path'), 'inventory-like files are suggested');
 
         $this->post('/inventory/connection', $this->form(['repo_url' => $this->remote->base.'/nope.git']))->assertSessionHasErrors('repo_url');
 

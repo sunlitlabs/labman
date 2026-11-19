@@ -44,14 +44,14 @@ final class InventoryTools
 
             new Tool('inventory_set_connection', 'Connect the inventory repository', 'Test and save the repository (https address, branch, inventory file path) and a personal access token (stored encrypted). The token passes through this conversation; entering it in the LabMan UI avoids that. The token may be omitted when only changing other settings for the same repository.',
                 [
-                    'repo_url' => Tool::str('https address of the repository, e.g. https://git.example.com/org/inventory.git'),
-                    'branch' => Tool::str('Branch to read and push to (default main).'),
-                    'path' => Tool::str('Inventory file path inside the repository, e.g. inventory/hosts.yml (YAML or INI).'),
-                    'username' => Tool::str('Git user name that owns the token (default git).'),
+                    'repo_url' => Tool::str('The repository address, or simply a link to the inventory file in a git web UI (GitHub, GitLab, Gitea, Forgejo, Codeberg, Bitbucket), e.g. https://github.com/org/repo/blob/main/ansible/inventory/hosts.ini. Branch and path are taken from such a link.'),
+                    'branch' => Tool::str('Branch to read and push to. Taken from the link when it has one, else main.'),
+                    'path' => Tool::str('Inventory file path inside the repository (YAML or INI). Taken from the link when it has one.'),
+                    'username' => Tool::str('Git user name. Normally omit it: it is worked out from the token.'),
                     'token' => Tool::str('Personal access token with read and write access to the repository contents.'),
                     'author_name' => Tool::str('Name on LabMan\'s commits (default LabMan).'),
                     'author_email' => Tool::str('E-mail on LabMan\'s commits (default labman@localhost).'),
-                ], ['repo_url', 'path'], 'admin', false, false,
+                ], ['repo_url'], 'admin', false, false,
                 fn (array $a) => self::guard(fn () => ['connected' => true] + Connector::connect($a) + ['connection' => RepoConfig::summary()])),
 
             new Tool('inventory_remove_connection', 'Disconnect the inventory repository', 'Delete the saved repository settings and token from LabMan. Nothing in the repository changes.',
