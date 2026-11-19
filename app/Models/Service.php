@@ -12,7 +12,7 @@ class Service extends Model
 {
     protected $fillable = [
         'name', 'domain', 'server_id', 'address', 'port', 'scheme', 'path', 'group',
-        'expect', 'verify_tls', 'public_check', 'websockets', 'notes',
+        'expect', 'verify_tls', 'public_check', 'websockets', 'notes', 'npm_host_id',
     ];
 
     protected function casts(): array

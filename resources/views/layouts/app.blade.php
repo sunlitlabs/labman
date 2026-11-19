@@ -27,6 +27,9 @@
             @can('view-screen', 'users')
                 <a href="{{ route('users.index') }}" @if(request()->routeIs('users.*')) aria-current="page" @endif>Users</a>
             @endcan
+            @can('admin')
+                <a href="{{ route('npm.index') }}" @if(request()->routeIs('npm.*')) aria-current="page" @endif>NPM</a>
+            @endcan
         </nav>
         <div class="who">
             @auth

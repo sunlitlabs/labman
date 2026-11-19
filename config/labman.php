@@ -36,6 +36,15 @@ return [
         'visibility.users' => 'admins',
     ],
 
+    /*
+    | The MCP endpoint (POST /mcp). Tokens are created by admins under Settings.
+    | LABMAN_MCP_ALLOWED_ORIGINS: comma separated browser origins allowed in addition to our own.
+    */
+    'mcp' => [
+        'enabled' => (bool) env('LABMAN_MCP_ENABLED', true),
+        'allowed_origins' => env('LABMAN_MCP_ALLOWED_ORIGINS', ''),
+    ],
+
     'limits' => [
         'check_interval_min' => 5,
         'timeout_min' => 0.5,

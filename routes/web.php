@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\NpmController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\SettingsController;
@@ -40,7 +42,18 @@ Route::middleware('admin')->group(function () {
     Route::resource('users', UserController::class)->except(['index', 'show', 'destroy']);
     Route::post('/users/{user}/approve', [UserController::class, 'approve'])->name('users.approve');
 
-    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::get('/npm', [NpmController::class, 'index'])->name('npm.index');
+    Route::post('/npm/connection', [NpmController::class, 'connect'])->name('npm.connect');
+    Route::delete('/npm/connection', [NpmController::class, 'disconnect'])->name('npm.disconnect');
+    Route::get('/npm/import', [NpmController::class, 'importPreview'])->name('npm.import');
+    Route::post('/npm/import', [NpmController::class, 'importApply'])->name('npm.import.apply');
+    Route::get('/npm/push', [NpmController::class, 'pushPreview'])->name('npm.push');
+    Route::post('/npm/push', [NpmController::class, 'pushApply'])->name('npm.push.apply');
+
+    Route::post('/settings/tokens', [ApiTokenController::class, 'store'])->name('tokens.store');
+    Route::delete('/settings/tokens/{token}', [ApiTokenController::class, 'destroy'])->name('tokens.destroy');
+
+    Route::put('/settings',[SettingsController::class, 'update'])->name('settings.update');
     Route::post('/settings/import', [SettingsController::class, 'import'])->name('settings.import');
     Route::get('/settings/export', [SettingsController::class, 'export'])->name('settings.export');
 });

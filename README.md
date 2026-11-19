@@ -7,7 +7,7 @@ A self-hostable **heads-up display for a home lab**. Two pages, one glance:
 
 Plus a filter box (press `/`), a status summary, light/dark theme that follows your OS, and a layout that works down to phone width. Laravel 12, plain Blade, no JavaScript framework, no build step.
 
-> Status: v0.1. Configuration is done in the admin UI or a YAML file. Nginx Proxy Manager integration is on the [roadmap](#roadmap), not built yet.
+> Status: v0.2. Configure it in the admin UI or a YAML file, let an AI assistant manage it over [MCP](#mcp-model-context-protocol), and sync with [Nginx Proxy Manager](#nginx-proxy-manager) (import hosts, push edits, always with a preview).
 
 ## Quick start
 
@@ -43,6 +43,8 @@ The copy button works over plain HTTP too: `navigator.clipboard` only exists in 
 |---|---|---|
 | `LABMAN_SETUP_TOKEN` | unset | If set, the setup wizard also demands this value. Use it whenever the port is reachable by anyone you do not trust. |
 | `LABMAN_TRUSTED_PROXIES` | unset | Comma separated proxy IPs/CIDRs, or `*`. |
+| `LABMAN_MCP_ENABLED` | `true` | Set to `false` to switch the `/mcp` endpoint off (it then returns 404). |
+| `LABMAN_MCP_ALLOWED_ORIGINS` | unset | Comma separated browser origins allowed to call `/mcp` besides LabMan's own. Non-browser clients send no `Origin` and are unaffected. |
 | `APP_KEY` | generated | Normally leave unset: the entrypoint creates one in `/data/app.key` on first start (mode 600). Setting it overrides the file. |
 | `DB_CONNECTION` | `sqlite` | `sqlite`, `mysql` or `pgsql`. |
 | `DB_DATABASE` | `/data/database.sqlite` | SQLite file path, or the database name for MySQL/PostgreSQL. |
@@ -110,6 +112,40 @@ services:
 
 Messages number entries from 1 (`servers[1]: 'name' is required`) and name the entry once it has a name (`server 'nas': port 99999 is outside 1-65535`).
 
+## MCP (Model Context Protocol)
+
+LabMan is an MCP server, so an AI assistant (Claude Code, Claude Desktop, any MCP client) can do what an administrator can do in the UI. The endpoint is `POST /mcp` (Streamable HTTP, stateless, JSON responses) and is authenticated with a **bearer API token** that an admin creates under **Settings > MCP access**. The token is shown once and only its SHA-256 hash is stored.
+
+```sh
+claude mcp add --transport http labman https://labman.example.com/mcp --header "Authorization: Bearer lm_xxxxxxxx"
+```
+
+Two token scopes:
+
+| Scope | Tools |
+|---|---|
+| `read` | `list_services`, `list_servers`, `get_status`, `get_settings`, `export_yaml` |
+| `admin` | everything above plus `run_health_check`; `create/update/delete_server`; `create/update/delete_service`; `update_settings` (including registration mode and per-screen visibility); `import_yaml` (with `dry_run` and `replace`); `list_users`, `create_user`, `update_user` (role, status, password reset), `approve_user`; and the Nginx Proxy Manager tools below |
+
+- Admin tools use exactly the same validation as the UI (shared code), so an AI cannot store an address, path or SSH user the forms would reject.
+- Tool annotations mark what is read-only and what is destructive, so clients can ask you before deleting, replacing via import, or writing to NPM. The server instructions also tell the assistant to confirm those.
+- **Tokens cannot manage tokens**: there is deliberately no tool for it, so a leaked token cannot mint more.
+- An admin token is only as strong as its owner: if the admin who created it is disabled or demoted it stops working. The "cannot demote or disable yourself / the last admin" guards apply to the token's owner.
+- Rate limited (120 calls a minute per token). Browsers' `Origin` header is checked against LabMan's own origin (DNS-rebinding protection). A signed-in browser session is **not** a credential for `/mcp`.
+
+## Nginx Proxy Manager
+
+Connect LabMan to your Nginx Proxy Manager (NPM) under **NPM** (admins only; tested against NPM 2.17). Enter the NPM admin address (usually port 81), an NPM user's e-mail and password, and LabMan logs in to prove it works. Use a dedicated NPM user; accounts with two-factor authentication are not supported. The login is stored **encrypted with the application key** in `/data`, and is never displayed again, exported to YAML, or returned by an MCP tool.
+
+Everything is **preview first, then apply what you tick**:
+
+- **Import (NPM → LabMan)**: lists every proxy host and what would happen to your services: *new service*, *update*, *in sync* or *skipped* (wildcard domains, unusable forward targets). Only fields NPM owns are touched on an existing service (scheme, port, backend, websockets, domain, the link). A forward host that equals a server's address links the service to that server. NPM is never written to.
+- **Push (LabMan → NPM)**: for each service with a domain, shows a diff against its proxy host (`forward_scheme`, `forward_host`, `forward_port`, websocket upgrade, and adding the domain name) and offers to create proxy hosts that do not exist yet (unticked by default; created without SSL, add a certificate in NPM). Updates are partial: SSL, certificates, access lists and everything else in NPM are left alone.
+- A service is linked to its proxy host by NPM host id (stored on first import/push) or by its domain.
+- **Safety:** each previewed item carries a fingerprint. Apply recomputes the plan and refuses any item whose fingerprint changed (an edit in LabMan *or* in NPM since you looked), applying nothing. **LabMan never deletes anything in NPM**; the client has no delete call.
+
+The same two-step flow is available to MCP clients (`npm_import_preview` / `npm_import_apply`, `npm_push_preview` / `npm_push_apply`), plus `npm_get_connection`, `npm_set_connection`, `npm_test_connection` and `npm_remove_connection`. Apply tools take the `key` and `fingerprint` copied from the preview.
+
 ## How health checks work
 
 Checks run in the background, never when a page loads. `php artisan labman:monitor` is a resident loop started by the container entrypoint (and restarted if it exits); it re-reads the settings every round, so changing the interval needs no restart. Results are stored in the database; the pages render what is stored and the browser polls a small JSON endpoint (`/status`) every interval.
@@ -140,6 +176,8 @@ Three kinds of visitor: **guest**, **user**, **admin**. For each of the four scr
 - A strict `Content-Security-Policy` (no inline scripts or styles), `X-Frame-Options: DENY`, `nosniff` and `same-origin` referrer policy are sent on every page.
 - Everything an admin types is validated: hosts/IPs (IPv6 allowed), ports 1-65535, paths start with `/`, domains are host names, and the SSH user may only contain letters, digits, `_`, `.` and `-` and must not start with `-`. The SSH command is built only from those stored fields, so a pasted command cannot smuggle options or shell syntax.
 - **Admins can make the server connect to any address they enter.** Health checks connect only to addresses stored by admins, but that includes internal ones, and failure details (such as `connection refused`) are shown to everyone who may see the page. Treat the admin role as trusted, and consider who you give the Services/Servers screens to.
+- **MCP tokens are powerful.** An `admin` token can change servers, services, settings (including who can see what), users and your NPM proxy hosts. Treat it like an admin password: create one per client, prefer `read` scope when that is enough, revoke it under Settings when done, and put LabMan behind HTTPS before using tokens over a network (a bearer token sent over plain HTTP can be sniffed). Set `LABMAN_MCP_ENABLED=false` if you do not want the endpoint at all.
+- The NPM login in LabMan is encrypted at rest with the application key. Anyone who can read both the database and `/data/app.key` can decrypt it, so protect and back up the volume accordingly, and give LabMan its own NPM user.
 - The container runs as an unprivileged user (uid 10001); the only writable location is `/data`.
 
 ## Architecture
@@ -150,6 +188,9 @@ Three kinds of visitor: **guest**, **user**, **admin**. For each of the four scr
 | YAML config | `app/Config/YamlConfig.php` |
 | Access rules | `app/Support/Access.php`, middleware `screen:` and `admin`, gates `view-screen` / `admin` |
 | Setup wizard | `app/Http/Controllers/SetupController.php`, middleware `RedirectToSetup` |
+| Shared validation | `app/Domain` (`ServerInput`, `ServiceInput`, `SettingsInput`, `UserAdmin`): used by the forms **and** the MCP tools |
+| MCP server | `app/Mcp` (protocol, tools), `app/Http/Controllers/McpController.php`, `routes/mcp.php`, `AuthenticateApiToken` |
+| Nginx Proxy Manager | `app/Npm`: `NpmClient`, `Connection` (encrypted login), `NpmSync` (plan / fingerprint / apply) |
 | Commands | `labman:monitor`, `labman:check`, `labman:import`, `labman:export` |
 | Frontend | `resources/views` (Blade), `public/css/labman.css`, `public/js/labman.js` (no build step) |
 
@@ -157,7 +198,7 @@ The image is built on **FrankenPHP** (Caddy + PHP in one binary): a single small
 
 ### Dependencies
 
-Runtime: `laravel/framework` (the application framework; its bundled HTTP client does the HTTP checks) and `symfony/yaml` (reading and writing the YAML config). Development only: `phpunit/phpunit` (tests) and `mockery/mockery` (needed by Laravel's console test helpers). No front-end packages, no starter kit, no admin framework.
+Runtime: `laravel/framework` (the application framework; its bundled HTTP client does the HTTP checks and talks to NPM) and `symfony/yaml` (reading and writing the YAML config). The MCP server is implemented in the app itself (it is a small JSON-RPC protocol), so it needs no extra package. Development only: `phpunit/phpunit` (tests) and `mockery/mockery` (needed by Laravel's console test helpers). No front-end packages, no starter kit, no admin framework.
 
 ## Development and tests
 
@@ -168,7 +209,7 @@ docker build --target test -t labman-test .
 docker run --rm labman-test
 ```
 
-The suite (PHPUnit) covers the setup wizard and its lock-out, the four screens x three roles (including the JSON endpoint), registration modes and approval, user administration guards, YAML validation messages, health-state logic against real local endpoints (PHP's built-in server and TCP listeners: redirect = answered, `expect` ranges, degraded via a failing public name, dead hosts not blocking), input validation, and HTML escaping.
+The suite (PHPUnit) covers the setup wizard and its lock-out, the four screens x three roles (including the JSON endpoint), registration modes and approval, user administration guards, YAML validation messages, health-state logic against real local endpoints (PHP's built-in server and TCP listeners: redirect = answered, `expect` ranges, degraded via a failing public name, dead hosts not blocking), input validation, and HTML escaping. For MCP it covers token authentication and scopes, the protocol (initialize, batches, errors), every tool, and the token UI. For NPM it covers connection handling and encryption, import and push plans, apply, stale-preview refusal and the guarantee that nothing is ever deleted, against an in-memory fake NPM whose responses were recorded from a real NPM 2.17 container.
 
 Useful one-offs against a running container:
 
@@ -179,8 +220,10 @@ docker compose exec labman php artisan labman:monitor --once
 
 ## Roadmap
 
-1. **Nginx Proxy Manager import**: read proxy hosts from NPM and propose services (domain, backend, TLS) to add.
-2. **UI editing + NPM sync with a diff preview**: edit services in LabMan and push changes to NPM, always showing exactly what would change before anything is written.
+Done: Nginx Proxy Manager import, push with a diff preview, and an MCP server (v0.2).
+
+1. **More NPM coverage**: redirection hosts, streams and 404 hosts, certificate/SSL awareness in previews, and optional deletion with a separate explicit confirmation.
+2. **MCP**: finer-grained token scopes (per tool group), and resources/prompts for common workflows.
 3. Later ideas: websocket-aware checks (the `websockets` flag is informational today), notifications on state changes, history graphs.
 
 ## License
