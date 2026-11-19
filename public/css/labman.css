@@ -430,3 +430,10 @@ table.plain th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 
   .hero { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .tile, .tile.flash-ok { animation: none; transition: none; } .tile.clickable:hover { transform: none; } }
+
+/* ---- wizard choices ---- */
+.wiz-row { border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; background: var(--bg); }
+.wiz-row:first-of-type { border-top: 1px solid var(--border); }
+.choices { border: 0; margin: 8px 0 0; padding: 0; display: flex; gap: 4px 18px; flex-wrap: wrap; }
+.choices .check { margin: 0; }
+details.formcard > summary { cursor: pointer; font-weight: 600; }

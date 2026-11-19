@@ -67,7 +67,7 @@ class NpmTest extends TestCase
     {
         $this->actingAs($this->admin)->post('/npm/connection', [
             'url' => 'http://npm.test:81/', 'email' => 'npm@example.com', 'password' => 'npm-secret', 'verify_tls' => 1,
-        ])->assertRedirect(route('npm.index'))->assertSessionHas('status');
+        ])->assertRedirect(route('npm.wizard'))->assertSessionHas('status');
 
         $stored = Connection::get();
         $this->assertSame(['url' => 'http://npm.test:81', 'email' => 'npm@example.com', 'password' => 'npm-secret', 'verify_tls' => true], $stored);
@@ -147,7 +147,7 @@ class NpmTest extends TestCase
 
     public function test_every_npm_route_is_admin_only(): void
     {
-        $routes = [['get', '/npm'], ['post', '/npm/connection'], ['delete', '/npm/connection'], ['get', '/npm/import'], ['post', '/npm/import'], ['get', '/npm/push'], ['post', '/npm/push']];
+        $routes = [['get', '/npm'], ['post', '/npm/connection'], ['delete', '/npm/connection'], ['get', '/npm/import'], ['post', '/npm/import'], ['get', '/npm/push'], ['post', '/npm/push'], ['get', '/npm/wizard'], ['post', '/npm/wizard']];
 
         foreach ($routes as [$method, $uri]) {
             $this->{$method}($uri)->assertRedirect(route('login'));

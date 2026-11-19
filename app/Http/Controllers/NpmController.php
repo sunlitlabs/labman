@@ -6,6 +6,7 @@ use App\Npm\Connection;
 use App\Npm\NpmClient;
 use App\Npm\NpmException;
 use App\Npm\NpmSync;
+use App\Npm\NpmWizard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -35,9 +36,56 @@ class NpmController extends Controller
             throw ValidationException::withMessages(['url' => $e->getMessage()]);
         }
 
+        $first = Connection::summary() === null;
         Connection::save($url, $data['email'], $data['password'], $verify);
 
-        return redirect()->route('npm.index')->with('status', "Connected to Nginx Proxy Manager {$version}.");
+        // A new connection goes straight to the guided sync; changing details of an existing one stays here.
+        return redirect()->route($first ? 'npm.wizard' : 'npm.index')->with('status', "Connected to Nginx Proxy Manager {$version}.");
+    }
+
+    /** The guided sync: everything that can be matched up between NPM and LabMan, with defaults chosen. */
+    public function wizard(Request $request)
+    {
+        $only = $request->query('service') ? (int) $request->query('service') : null;
+
+        try {
+            $built = (new NpmWizard(new NpmSync(NpmClient::fromStored())))->build($only);
+        } catch (NpmException $e) {
+            return redirect()->route('npm.index')->withErrors(['npm' => $e->getMessage()]);
+        }
+
+        return view('npm.wizard', $built + ['only' => $only, 'connection' => Connection::summary()]);
+    }
+
+    public function wizardApply(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'choice' => ['required', 'array'],
+            'choice.*' => ['in:import,push,skip'],
+            'fp_import' => ['array'], 'fp_import.*' => ['string', 'size:40'],
+            'push_key' => ['array'], 'push_key.*' => ['string', 'max:100'],
+            'fp_push' => ['array'], 'fp_push.*' => ['string', 'size:40'],
+        ]);
+
+        $sel = NpmWizard::selections($data['choice'], $data['fp_import'] ?? [], $data['push_key'] ?? [], $data['fp_push'] ?? []);
+
+        if ($sel['import'] === [] && $sel['push'] === []) {
+            return redirect()->route('npm.index')->with('status', 'Nothing was selected, so nothing changed.');
+        }
+
+        try {
+            $sync = new NpmSync(NpmClient::fromStored());
+            $imported = $sel['import'] ? $sync->applyImport($sel['import']) : ['applied' => 0, 'results' => []];
+            $pushed = $sel['push'] ? $sync->applyPush($sel['push']) : ['applied' => 0, 'results' => []];
+        } catch (NpmException $e) {
+            return redirect()->route('npm.wizard')->withErrors(['npm' => $e->getMessage()]);
+        }
+
+        $applied = $imported['applied'] + $pushed['applied'];
+
+        return redirect()->route('npm.index')
+            ->with('status', "{$applied} change(s) applied.")
+            ->with('npm_results', array_merge($imported['results'], $pushed['results']));
     }
 
     public function disconnect(): RedirectResponse

@@ -87,7 +87,7 @@ class ConnectLinkTest extends TestCase
     {
         $this->actingAs(User::where('role', 'admin')->first())
             ->post('/inventory/connection', ['repo_url' => $this->remote->remote, 'branch' => 'main', 'path' => 'ansible/inventory/all_servers.ini', 'token' => 'pat-123'])
-            ->assertSessionHasNoErrors()->assertRedirect(route('inventory.index'));
+            ->assertSessionHasNoErrors()->assertRedirect(route('inventory.compare'));
 
         $this->assertStringContainsString('Connected as git. Read 1 host(s)', session('status'));
     }

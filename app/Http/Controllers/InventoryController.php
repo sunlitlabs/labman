@@ -46,7 +46,8 @@ class InventoryController extends Controller
             throw ValidationException::withMessages([$field => $message]);
         }
 
-        return redirect()->route('inventory.index')->with('status', 'Connected as '.$result['username'].'. Read '.$result['hosts'].' host(s) from '.$result['path'].'.');
+        // Straight to the comparison, so the first thing after connecting is matching hosts to servers.
+        return redirect()->route('inventory.compare')->with('status', 'Connected as '.$result['username'].'. Read '.$result['hosts'].' host(s) from '.$result['path'].'. Here is how they compare with your servers.');
     }
 
     /** Fills the connection form from a pasted link (called by the form's script as you paste). */

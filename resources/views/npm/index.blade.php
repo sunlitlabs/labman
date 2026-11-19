@@ -8,6 +8,9 @@
         Import proxy hosts as services, or push LabMan's services back to NPM. Every change is previewed first and
         nothing is written until you tick it. LabMan never deletes anything in NPM.
     </p>
+    @unless ($connection)
+        <p class="notice">Connect below. LabMan then walks you through matching your proxy hosts with your services, with sensible defaults already chosen.</p>
+    @endunless
 
     @if (session('npm_results'))
         <div class="card">
@@ -28,8 +31,10 @@
                 @unless ($connection['verify_tls']) <span class="muted">(TLS certificate not verified)</span> @endunless
             </p>
             <div class="actions">
-                <a class="btn btn-primary" href="{{ route('npm.import') }}">Preview import (NPM → LabMan)</a>
-                <a class="btn btn-primary" href="{{ route('npm.push') }}">Preview push (LabMan → NPM)</a>
+                <a class="btn btn-primary" href="{{ route('npm.wizard') }}">Match everything up (guided)</a>
+                <a class="btn" href="{{ route('npm.import') }}">Preview import (NPM → LabMan)</a>
+                <a class="btn" href="{{ route('npm.push') }}">Preview push (LabMan → NPM)</a>
+                <a class="btn" href="{{ $connection['url'] }}" target="_blank" rel="noopener noreferrer">Open NPM</a>
                 <form method="POST" action="{{ route('npm.disconnect') }}">
                     @csrf @method('DELETE')
                     <button class="btn-danger" type="submit" data-confirm>Disconnect</button>

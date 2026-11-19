@@ -60,7 +60,7 @@ class InventoryUiTest extends TestCase
     public function test_connecting_clones_the_repository_and_stores_the_token_encrypted(): void
     {
         $this->actingAs($this->admin)->post('/inventory/connection', $this->form())
-            ->assertRedirect(route('inventory.index'));
+            ->assertRedirect(route('inventory.compare'));
 
         $this->assertStringContainsString('Read 3 host(s)', session('status'));
 
