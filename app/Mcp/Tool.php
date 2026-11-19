@@ -72,6 +72,11 @@ final class Tool
         return ['type' => 'boolean', 'description' => $description];
     }
 
+    public static function strs(string $description): array
+    {
+        return ['type' => 'array', 'items' => ['type' => 'string'], 'description' => $description];
+    }
+
     public static function ints(string $description): array
     {
         return ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => $description];

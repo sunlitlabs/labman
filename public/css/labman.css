@@ -107,6 +107,15 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: 0
 label { display: block; font-weight: 600; margin: 0 0 4px; }
 .field { margin-bottom: 14px; }
 .hint { color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+/* Form fields: the label, its hint on a line of its own, then the control. In a two-column grid the label, control and
+   message rows are shared (subgrid), so controls line up whatever the hints say. */
+.field > label .hint { display: block; line-height: 1.3; margin-top: 1px; }
+.field > small.hint, .field > .field-error { display: block; margin-top: 4px; }
+@supports (grid-template-rows: subgrid) {
+  .grid2 > .field { display: grid; grid-template-rows: subgrid; grid-row: span 3; margin-bottom: 0; padding-bottom: 16px; }
+  .grid2 > .field > label { align-self: end; }
+  .grid2 > .field > small.hint { align-self: start; margin-top: 0; }
+}
 input[type=text], input[type=email], input[type=password], input[type=number], input[type=search], select, textarea {
   width: 100%;
   font: inherit;
@@ -159,7 +168,9 @@ pre.code { background: var(--bg); border: 1px solid var(--border); border-radius
 .formcard { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin: 14px 0; }
 .formcard > h2 { margin: 0 0 4px; }
 .formcard > .sub { margin: 0 0 14px; color: var(--muted); font-size: 0.9rem; }
-.savebar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.savebar { position: sticky; bottom: 0; z-index: 20; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 18px -16px 0; padding: 12px 16px; background: var(--card); border-top: 1px solid var(--border); box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.08); }
+.savebar .spacer { flex: 1; }
+.savebar .dirty { color: var(--degraded); font-size: 0.85rem; }
 .choice-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
 .choice-cards label { margin: 0; font-weight: 400; cursor: pointer; }
 .choice-cards input { position: absolute; opacity: 0; pointer-events: none; }
@@ -256,7 +267,7 @@ pre.taskout { background: #0f1218; color: #d7dde8; border-radius: var(--radius);
 fieldset.plain { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
 .check { display: flex; gap: 8px; align-items: center; font-weight: 400; margin-bottom: 6px; }
 .check input { width: auto; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; align-items: start; }
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -443,3 +454,33 @@ details.formcard > summary { cursor: pointer; font-weight: 600; }
 .scope { margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; background: var(--unknown-bg); color: var(--unknown); }
 .scope-public { background: var(--up-bg); color: var(--up); }
 .tile-public { font-size: 0.78rem; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- add / remove lists ---- */
+.listedit-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.listedit-row { display: flex; align-items: center; gap: 10px; }
+.listedit-row input[type=text] { flex: 1; min-width: 0; }
+.listedit-default { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: 400; white-space: nowrap; color: var(--muted); }
+.listedit-default input { width: auto; }
+.listedit-primary { display: none; color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.listedit-row:first-child .listedit-primary { display: inline; }
+.listedit-row:first-child:last-child [data-remove] { visibility: visible; }
+.btn-small { padding: 4px 10px; font-size: 0.85rem; }
+.listedit-empty { color: var(--muted); font-size: 0.9rem; margin: 0 0 8px; }
+@media (max-width: 560px) { .listedit-row { flex-wrap: wrap; } .listedit-row input[type=text] { flex-basis: 100%; } }
+
+/* ---- icon picker ---- */
+.iconpick { position: relative; }
+.iconpick-toggle { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font: inherit; color: var(--fg); cursor: pointer; }
+.iconpick-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iconpick-caret { color: var(--muted); }
+.ico-sm { width: 28px; height: 28px; border-radius: 8px; background: var(--unknown-bg); position: relative; overflow: hidden; display: inline-flex; flex: none; }
+.ico-sm .ico-img { padding: 3px; }
+.iconpick-panel { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22); padding: 8px; }
+.iconpick-panel[hidden] { display: none; }
+.iconpick-search { margin-bottom: 6px; }
+.iconpick-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.iconpick-list button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 6px; font: inherit; color: var(--fg); cursor: pointer; }
+.iconpick-list button:hover, .iconpick-list button:focus-visible { background: var(--unknown-bg); }
+.iconpick-list small { color: var(--muted); }
+.pick-img { width: 24px; height: 24px; object-fit: contain; flex: none; background: #fff; border-radius: 5px; padding: 2px; }
+.iconpick-note { margin: 6px 4px 0; font-size: 0.85rem; }

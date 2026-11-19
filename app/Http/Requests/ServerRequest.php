@@ -15,7 +15,7 @@ class ServerRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge(array_intersect_key(ServerInput::prepare($this->all()), array_flip(['ports', 'ssh_port', 'monitor', 'check_ssh'])));
+        $this->merge(array_intersect_key(ServerInput::prepare($this->all()), array_flip(['ports', 'ssh_port', 'monitor', 'check_ssh', 'domain', 'extra_domains'])));
     }
 
     public function rules(): array

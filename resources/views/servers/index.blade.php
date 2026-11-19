@@ -34,7 +34,10 @@
                                 <span class="nm">{{ $server->name }}</span>
                                 @if ($server->notes)<small>{{ $server->notes }}</small>@endif
                             </div>
-                            <div class="cell domain{{ $server->domain ? '' : ' is-empty' }}">{{ $server->domain ?: '—' }}</div>
+                            @php($names = \App\Support\Domains::namesOf($server)['local'])
+                            <div class="cell domain{{ $names ? '' : ' is-empty' }}">
+                                @forelse ($names as $name)<span class="dom">{{ $name }}</span>@empty — @endforelse
+                            </div>
                             <div class="cell addr">
                                 <span class="mono">{{ $server->address }}</span>
                                 <small class="mono">{{ $ssh }} <span class="ssh-hint">click to copy</span></small>

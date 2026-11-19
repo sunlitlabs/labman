@@ -92,7 +92,7 @@
                 </div>
             </div>
 
-            <div class="actions">
+            <div class="savebar">
                 <button class="primary" type="submit">Review the run</button>
                 <a class="btn" href="{{ route('semaphore.index', ['project' => $project]) }}">Cancel</a>
             </div>

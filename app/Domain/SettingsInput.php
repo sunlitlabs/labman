@@ -24,8 +24,10 @@ final class SettingsInput
             'ssh_target' => ['required', Rule::in(['address', 'domain'])],
             'registration_mode' => ['required', Rule::in(config('labman.registration_modes'))],
             'icons' => ['boolean'],
-            'local_domains' => ['nullable', 'string', 'max:500', Check::domainList()],
-            'public_domains' => ['nullable', 'string', 'max:500', Check::domainList()],
+            'local_domains' => ['nullable', Check::domainList()],
+            'public_domains' => ['nullable', Check::domainList()],
+            'local_default' => ['nullable', 'string', 'max:253'],
+            'public_default' => ['nullable', 'string', 'max:253'],
             'npm_cert_local' => ['nullable', 'integer', 'min:0'],
             'npm_cert_public' => ['nullable', 'integer', 'min:0'],
         ];
@@ -72,9 +74,10 @@ final class SettingsInput
         $values['ssh_user'] = $values['ssh_user'] ?? '';
         foreach (['local_domains', 'public_domains'] as $key) {
             if (array_key_exists($key, $values)) {
-                $values[$key] = implode(', ', Domains::parse($values[$key]));
+                $values[$key] = implode(', ', Domains::compose($values[$key], $values[str_replace('domains', 'default', $key)] ?? null));
             }
         }
+        unset($values['local_default'], $values['public_default']);
         foreach (['npm_cert_local', 'npm_cert_public'] as $key) {
             if (array_key_exists($key, $values)) {
                 $values[$key] = (string) ($values[$key] ?? '');

@@ -67,7 +67,7 @@ final class Check
     public static function domainList(): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail) {
-            $bad = is_string($value) ? Domains::firstInvalid(Domains::parse($value)) : 'value';
+            $bad = is_string($value) || is_array($value) ? Domains::firstInvalid(Domains::parse($value)) : 'value';
             if ($bad !== null) {
                 $fail("The :attribute has an entry that is not a domain name: '{$bad}'. Separate several with commas.");
             }

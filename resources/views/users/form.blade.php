@@ -46,7 +46,7 @@
             </div>
 
             <p class="hint">You cannot demote or disable yourself, or the last active administrator.</p>
-            <div class="actions">
+            <div class="savebar">
                 <button class="primary" type="submit">Save</button>
                 <a class="btn" href="{{ route('users.index') }}">Cancel</a>
             </div>

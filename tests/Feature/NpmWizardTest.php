@@ -76,7 +76,7 @@ class NpmWizardTest extends TestCase
         $this->assertSame('new_there', $there['kind']);
         $this->assertSame('skip', $there['default'], 'creating proxy hosts in NPM is opt-in');
 
-        $this->assertSame(['new_here' => 1, 'link_only' => 1, 'differs' => 1, 'new_there' => 1, 'in_sync' => 1, 'skipped' => 1], $counts);
+        $this->assertSame(['new_here' => 1, 'link_only' => 1, 'differs' => 1, 'new_there' => 1, 'suggest_domain' => 0, 'in_sync' => 1, 'skipped' => 1], $counts);
     }
 
     public function test_the_page_renders_with_defaults_ticked(): void

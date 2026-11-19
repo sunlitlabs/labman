@@ -7,6 +7,7 @@ use App\Npm\NpmClient;
 use App\Npm\NpmException;
 use App\Npm\NpmSync;
 use App\Npm\NpmWizard;
+use App\Support\DomainSuggestions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -47,29 +48,31 @@ class NpmController extends Controller
     public function wizard(Request $request)
     {
         $only = $request->query('service') ? (int) $request->query('service') : null;
+        $suggest = $request->boolean('suggest') && DomainSuggestions::available();
 
         try {
-            $built = (new NpmWizard(new NpmSync(NpmClient::fromStored())))->build($only);
+            $built = (new NpmWizard(new NpmSync(NpmClient::fromStored())))->build($only, $suggest);
         } catch (NpmException $e) {
             return redirect()->route('npm.index')->withErrors(['npm' => $e->getMessage()]);
         }
 
-        return view('npm.wizard', $built + ['only' => $only, 'connection' => Connection::summary()]);
+        return view('npm.wizard', $built + ['only' => $only, 'suggest' => $suggest, 'suggestAvailable' => DomainSuggestions::available(), 'connection' => Connection::summary()]);
     }
 
     public function wizardApply(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'choice' => ['required', 'array'],
-            'choice.*' => ['in:import,push,skip'],
+            'choice.*' => ['in:import,push,skip,apply'],
             'fp_import' => ['array'], 'fp_import.*' => ['string', 'size:40'],
             'push_key' => ['array'], 'push_key.*' => ['string', 'max:100'],
             'fp_push' => ['array'], 'fp_push.*' => ['string', 'size:40'],
         ]);
 
+        $named = NpmWizard::applyDomainChoices($data['choice']);
         $sel = NpmWizard::selections($data['choice'], $data['fp_import'] ?? [], $data['push_key'] ?? [], $data['fp_push'] ?? []);
 
-        if ($sel['import'] === [] && $sel['push'] === []) {
+        if ($sel['import'] === [] && $sel['push'] === [] && $named === []) {
             return redirect()->route('npm.index')->with('status', 'Nothing was selected, so nothing changed.');
         }
 
@@ -81,11 +84,11 @@ class NpmController extends Controller
             return redirect()->route('npm.wizard')->withErrors(['npm' => $e->getMessage()]);
         }
 
-        $applied = $imported['applied'] + $pushed['applied'];
+        $applied = $imported['applied'] + $pushed['applied'] + count($named);
 
         return redirect()->route('npm.index')
             ->with('status', "{$applied} change(s) applied.")
-            ->with('npm_results', array_merge($imported['results'], $pushed['results']));
+            ->with('npm_results', array_merge($imported['results'], $pushed['results'], $named));
     }
 
     public function disconnect(): RedirectResponse

@@ -2,6 +2,10 @@
 
 namespace App\Npm;
 
+use App\Models\Server;
+use App\Models\Service;
+use App\Support\DomainSuggestions;
+
 /**
  * The guided view of an NPM sync: instead of two separate previews (import and push), one list of "things to
  * match up", each with sensible default. It only reads the two plans NpmSync already builds, and it applies
@@ -21,7 +25,7 @@ final class NpmWizard
     /**
      * @return array{rows: list<array<string, mixed>>, counts: array<string, int>}
      */
-    public function build(?int $onlyService = null): array
+    public function build(?int $onlyService = null, bool $suggestDomains = false): array
     {
         $import = collect($this->sync->importPlan());
         $push = collect($this->sync->pushPlan())->keyBy('key');
@@ -54,12 +58,79 @@ final class NpmWizard
             $rows[] = $item['action'] === 'create' ? $this->serviceOnly($item) : $this->plain($item, 'skipped');
         }
 
-        $counts = array_fill_keys(['new_here', 'link_only', 'differs', 'new_there', 'in_sync', 'skipped'], 0);
+        if ($suggestDomains) {
+            array_push($rows, ...$this->domainRows($onlyService));
+        }
+
+        $counts = array_fill_keys(['new_here', 'link_only', 'differs', 'new_there', 'suggest_domain', 'in_sync', 'skipped'], 0);
         foreach ($rows as $row) {
             $counts[$row['kind']]++;
         }
 
         return ['rows' => $rows, 'counts' => $counts];
+    }
+
+    /**
+     * Opt-in rows: a local domain guessed from the name for every service and server without one. Applying one only
+     * saves the name in LabMan; a later push can then create its proxy host.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function domainRows(?int $onlyService): array
+    {
+        $rows = [];
+        $suggestions = DomainSuggestions::all();
+
+        foreach ([['services', 'svc', Service::class], ['servers', 'srv', Server::class]] as [$kind, $prefix, $model]) {
+            foreach ($suggestions[$kind] as $id => $name) {
+                if ($onlyService !== null && ($prefix !== 'svc' || $id !== $onlyService)) {
+                    continue;
+                }
+                $label = $model::find($id)?->name;
+                $rows[] = [
+                    'id' => "suggest:{$prefix}:{$id}", 'kind' => 'suggest_domain', 'title' => ($prefix === 'svc' ? 'Service ' : 'Server ').$label,
+                    'import' => null, 'push' => null, 'default' => 'apply', 'warnings' => [],
+                    'changes' => [['field' => 'domain', 'from' => null, 'to' => $name]],
+                    'options' => ['apply' => 'Give it this local name', 'skip' => 'Leave it without'],
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Save the suggested names the admin kept ticked. The name is worked out again here, never taken from the form.
+     *
+     * @param  array<string, string>  $choices
+     * @return list<array{title: string, outcome: string, message: string}>
+     */
+    public static function applyDomainChoices(array $choices): array
+    {
+        $wanted = array_keys(array_filter($choices, fn ($c, $id) => $c === 'apply' && str_starts_with($id, 'suggest:'), ARRAY_FILTER_USE_BOTH));
+        if ($wanted === []) {
+            return [];
+        }
+
+        $suggestions = DomainSuggestions::all();
+        $results = [];
+
+        foreach ($wanted as $id) {
+            [, $prefix, $key] = explode(':', $id) + [null, null, null];
+            $model = $prefix === 'svc' ? Service::find((int) $key) : ($prefix === 'srv' ? Server::find((int) $key) : null);
+            $name = $suggestions[$prefix === 'svc' ? 'services' : 'servers'][(int) $key] ?? null;
+
+            if ($model === null || $name === null) {
+                $results[] = ['title' => $id, 'outcome' => 'failed', 'message' => 'That suggestion no longer applies (the item changed or the name is taken).'];
+
+                continue;
+            }
+
+            $model->forceFill(['domain' => $name])->save();
+            $results[] = ['title' => $model->name, 'outcome' => 'applied', 'message' => "Local domain set to {$name}."];
+        }
+
+        return $results;
     }
 
     /** @param array<string, mixed> $import @param array<string, mixed>|null $push */

@@ -20,6 +20,7 @@ final class Present
             'name' => $server->name,
             'address' => $server->address,
             'domain' => $server->domain,
+            'extra_domains' => self::extras($server),
             'group' => $server->group,
             'ports' => $server->ports ?? [],
             'ssh_user' => $server->ssh_user,
@@ -46,6 +47,7 @@ final class Present
             'name' => $service->name,
             'domain' => $service->domain,
             'public_domain' => $service->public_domain,
+            'extra_domains' => self::extras($service),
             'server' => $service->server?->name,
             'server_id' => $service->server_id,
             'address' => $service->address,
@@ -70,6 +72,14 @@ final class Present
             'checked_at' => $status['checked_at'],
             'checks' => $status['checks'],
         ];
+    }
+
+    /** @return list<string> every extra name, local ones first */
+    private static function extras($item): array
+    {
+        $extra = \App\Support\Domains::extras($item->extra_domains);
+
+        return array_merge($extra['local'], $extra['public']);
     }
 
     /** @return array<string, mixed> */

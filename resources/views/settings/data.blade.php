@@ -9,7 +9,14 @@
     <div class="formcard">
         <h2>Export</h2>
         <p class="sub">Download everything as <code>labman.yml</code>. Secrets (tokens, passwords) are never included.</p>
-        <a class="btn btn-primary" href="{{ route('settings.export') }}">Download labman.yml</a>
+        <form method="GET" action="{{ route('settings.export') }}">
+            <label class="check">
+                <input type="checkbox" name="suggest_domains" value="1" @disabled(! \App\Support\DomainSuggestions::available())>
+                <span>Suggest a local domain for every service and server that has none
+                    <span class="hint">built from its name under your default local domain{{ \App\Support\DomainSuggestions::available() ? ' ('.\App\Support\Domains::defaultFor('local').')' : '; set one under Settings > General first' }}. Off by default; the file only, nothing is saved.</span></span>
+            </label>
+            <button class="btn btn-primary" type="submit">Download labman.yml</button>
+        </form>
     </div>
 
     <form class="formcard" method="POST" action="{{ route('settings.import') }}" enctype="multipart/form-data">

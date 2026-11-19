@@ -50,7 +50,7 @@ class SettingsController extends Controller
     public function update(Request $request)
     {
         $sections = [
-            'general' => ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target', 'icons', 'local_domains', 'public_domains', 'npm_cert_local', 'npm_cert_public'],
+            'general' => ['title', 'check_interval', 'timeout', 'ssh_user', 'ssh_target', 'icons', 'local_domains', 'public_domains', 'local_default', 'public_default', 'npm_cert_local', 'npm_cert_public'],
             'access' => ['registration_mode', 'visibility'],
         ];
 
@@ -92,9 +92,9 @@ class SettingsController extends Controller
         ));
     }
 
-    public function export()
+    public function export(Request $request)
     {
-        return response(YamlConfig::export(), 200, [
+        return response(YamlConfig::export($request->boolean('suggest_domains')), 200, [
             'Content-Type' => 'application/x-yaml; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="labman.yml"',
         ]);

@@ -125,31 +125,173 @@
     filter.select();
   });
 
-  // ------------------------------------------------- icon name suggestions
-  var iconInput = document.getElementById('icon');
-  var iconList = document.getElementById('icon-list');
-  if (iconInput && iconList && iconInput.getAttribute('data-suggest-url')) {
-    var iconTimer = null;
-    iconInput.addEventListener('input', function () {
-      clearTimeout(iconTimer);
-      var q = iconInput.value.trim();
-      if (q.length < 2) return;
-      iconTimer = setTimeout(function () {
-        fetch(iconInput.getAttribute('data-suggest-url') + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
-          .then(function (r) { return r.ok ? r.json() : { icons: [] }; })
-          .then(function (data) {
-            iconList.textContent = '';
-            (data.icons || []).forEach(function (name) {
-              var o = document.createElement('option');
-              o.value = name;
-              iconList.appendChild(o);
-            });
-          })
-          .catch(function () {});
-      }, 200);
-    });
+  // ------------------------------------------------------ add / remove lists
+  function slugify(text) {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   }
 
+  document.addEventListener('click', function (e) {
+    var add = e.target.closest && e.target.closest('[data-listedit] [data-add]');
+    if (add) {
+      var box = add.closest('[data-listedit]');
+      var tpl = box.querySelector('template[data-row]');
+      var rows = box.querySelector('.listedit-rows');
+      var node = tpl.content.firstElementChild.cloneNode(true);
+      var input = node.querySelector('input[type=text]');
+      var suffix = box.getAttribute('data-suffix');
+      var from = box.getAttribute('data-slug-from') && document.getElementById(box.getAttribute('data-slug-from'));
+      if (suffix && from && slugify(from.value)) input.value = slugify(from.value) + '.' + suffix;
+      rows.appendChild(node);
+      var radio = node.querySelector('input[type=radio]');
+      if (radio) {
+        radio.value = input.value;
+        if (rows.querySelectorAll('input[type=radio]').length === 1) radio.checked = true;
+      }
+      input.focus();
+      input.select();
+      return;
+    }
+    var rm = e.target.closest && e.target.closest('[data-listedit] [data-remove]');
+    if (rm) {
+      var row = rm.closest('.listedit-row');
+      var list = row.parentNode;
+      var wasDefault = row.querySelector('input[type=radio]:checked');
+      list.removeChild(row);
+      if (wasDefault) {
+        var first = list.querySelector('input[type=radio]');
+        if (first) first.checked = true;
+      }
+    }
+  });
+
+  // The default radio carries the row's text, so it follows edits.
+  document.addEventListener('input', function (e) {
+    var input = e.target;
+    if (input.matches && input.matches('[data-listedit] .listedit-row input[type=text]')) {
+      var radio = input.closest('.listedit-row').querySelector('input[type=radio]');
+      if (radio) radio.value = input.value.trim();
+    }
+  });
+
+  // ----------------------------------------------------------- icon picker
+  document.querySelectorAll('[data-iconpick]').forEach(function (box) {
+    var hidden = box.querySelector('input[type=hidden]');
+    var toggle = box.querySelector('[data-toggle]');
+    var panel = box.querySelector('.iconpick-panel');
+    var search = box.querySelector('[data-search]');
+    var list = box.querySelector('[data-list]');
+    var note = box.querySelector('[data-note]');
+    var fixed = Array.prototype.slice.call(list.children);
+    var timer = null;
+    var seq = 0;
+
+    function setThumb(slug) {
+      var holder = toggle.querySelector('.ico');
+      holder.textContent = '';
+      if (!slug) return;
+      var img = document.createElement('img');
+      img.className = 'ico-img';
+      img.alt = '';
+      img.src = box.getAttribute('data-icon-url') + '/' + encodeURIComponent(slug);
+      img.addEventListener('error', function () { img.hidden = true; });
+      holder.appendChild(img);
+    }
+
+    function choose(value) {
+      hidden.value = value;
+      var auto = box.getAttribute('data-auto');
+      toggle.querySelector('[data-label]').textContent = value === 'none' ? 'No icon' : value !== '' ? value : 'Automatic' + (auto ? ' (' + auto + ')' : '');
+      setThumb(value === 'none' ? null : value !== '' ? value : auto);
+      close(true);
+    }
+
+    function open() {
+      panel.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+      if (!search.value) {
+        var src = document.getElementById(box.getAttribute('data-seed-from'));
+        search.value = src ? src.value.trim() : '';
+      }
+      run();
+      search.focus();
+      search.select();
+    }
+
+    function close(refocus) {
+      panel.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+      if (refocus) toggle.focus();
+    }
+
+    function render(slugs) {
+      Array.prototype.slice.call(list.children).forEach(function (li) { if (fixed.indexOf(li) === -1) list.removeChild(li); });
+      slugs.forEach(function (slug) {
+        var li = document.createElement('li');
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'option');
+        b.setAttribute('data-value', slug);
+        var img = document.createElement('img');
+        img.className = 'pick-img';
+        img.alt = '';
+        img.loading = 'lazy';
+        img.src = box.getAttribute('data-icon-url') + '/' + encodeURIComponent(slug);
+        img.addEventListener('error', function () { img.style.visibility = 'hidden'; });
+        b.appendChild(img);
+        b.appendChild(document.createTextNode(slug));
+        li.appendChild(b);
+        list.appendChild(li);
+      });
+      note.textContent = slugs.length ? '' : (search.value.trim() ? 'No icon in the library matches that.' : 'Type to search the library.');
+    }
+
+    function run() {
+      var q = search.value.trim();
+      var mine = ++seq;
+      if (q.length < 2) { render([]); return; }
+      fetch(box.getAttribute('data-search-url') + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : { icons: [] }; })
+        .then(function (data) { if (mine === seq) render(data.icons || []); })
+        .catch(function () { if (mine === seq) render([]); });
+    }
+
+    toggle.addEventListener('click', function () { panel.hidden ? open() : close(false); });
+    search.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 180); });
+    list.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-value]');
+      if (b) choose(b.getAttribute('data-value'));
+    });
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !panel.hidden) { e.preventDefault(); close(true); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        var items = Array.prototype.slice.call(panel.querySelectorAll('[data-search], button[data-value]'));
+        var at = items.indexOf(document.activeElement);
+        if (at === -1) return;
+        e.preventDefault();
+        var next = items[Math.max(0, Math.min(items.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))];
+        next.focus();
+      }
+      if (e.key === 'Enter' && document.activeElement === search) {
+        e.preventDefault();
+        var first = list.querySelector('li:nth-child(n+3) button');
+        if (first) choose(first.getAttribute('data-value'));
+      }
+    });
+    document.addEventListener('click', function (e) { if (!panel.hidden && !box.contains(e.target)) close(false); });
+  });
+
+  // A checkbox that reloads the page with its setting (the wizard's suggestion switch).
+  document.querySelectorAll('[data-autosubmit]').forEach(function (box) {
+    box.addEventListener('change', function () { box.form.submit(); });
+  });
+
+  // Ctrl/Cmd+S saves the form on the page.
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      var btn = document.querySelector('.savebar button.primary[type=submit]:not(:disabled)');
+      if (btn) { e.preventDefault(); btn.click(); }
+    }
+  });
   // ---------------------------------------------------------- live status
   var url = body.getAttribute('data-status-url');
   var interval = Math.max(5, parseFloat(body.getAttribute('data-interval')) || 30);

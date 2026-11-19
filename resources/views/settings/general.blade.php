@@ -48,14 +48,13 @@
                     their name falls under. Leave both empty if you only use one domain.
                 </p>
                 <div class="grid2">
-                    <div class="field">
-                        <label for="local_domains">Local domains <span class="hint">resolve on your network, e.g. home.example.com</span></label>
-                        <input id="local_domains" name="local_domains" type="text" maxlength="500" autocomplete="off" value="{{ old('local_domains', $values['local_domains']) }}">
-                    </div>
-                    <div class="field">
-                        <label for="public_domains">Public domains <span class="hint">reachable from the internet, e.g. example.org</span></label>
-                        <input id="public_domains" name="public_domains" type="text" maxlength="500" autocomplete="off" value="{{ old('public_domains', $values['public_domains']) }}">
-                    </div>
+                    @foreach (['local' => ['Local domains', 'Names that resolve on your network.', 'home.example.com'], 'public' => ['Public domains', 'Names reachable from the internet.', 'example.org']] as $scope => [$title, $help, $example])
+                        @php($list = \App\Support\Domains::parse(old($scope.'_domains', $values[$scope.'_domains'])))
+                        <div class="field">
+                            <label>{{ $title }} <span class="hint">{{ $help }} The marked one is the default.</span></label>
+                            @include('partials.listedit', ['name' => $scope.'_domains', 'values' => $list, 'default' => old($scope.'_default', $list[0] ?? null), 'defaultName' => $scope.'_default', 'placeholder' => $example, 'addLabel' => 'Add '.$scope.' domain'])
+                        </div>
+                    @endforeach
                     @foreach (['npm_cert_local' => 'Certificate for local domains', 'npm_cert_public' => 'Certificate for public domains'] as $key => $label)
                         <div class="field">
                             <label for="{{ $key }}">{{ $label }} <span class="hint">used when LabMan creates a proxy host in NPM</span></label>

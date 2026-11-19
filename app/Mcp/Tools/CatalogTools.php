@@ -36,7 +36,8 @@ final class CatalogTools
         $server = [
             'name' => Tool::str('Unique server name.'),
             'address' => Tool::str('IP address (IPv6 allowed) or host name that health checks connect to.'),
-            'domain' => Tool::str('Optional public domain, e.g. nas.example.com.'),
+            'domain' => Tool::str('Optional domain, e.g. nas.home.example.com.'),
+            'extra_domains' => Tool::strs('Further domain names for this server.'),
             'group' => Tool::str('Optional group heading.'),
             'ports' => Tool::ints('Extra TCP ports to check besides SSH.'),
             'ssh_user' => Tool::str('SSH user for Copy SSH (overrides the default).'),
@@ -50,6 +51,7 @@ final class CatalogTools
         $service = [
             'name' => Tool::str('Unique service name.'),
             'domain' => Tool::str('Optional primary domain, normally the local one (wiki.home.example.com); it is what clicking the service opens and is health-checked over HTTPS.'),
+            'extra_domains' => Tool::strs('Further domain names for this service (local ones and public ones, sorted by the configured domains). They are shown and health-checked; NPM sync only links the primary names.'),
             'public_domain' => Tool::str('Optional second domain reachable from the internet (wiki.example.com); checked too, shown as a second link and has its own proxy host in NPM.'),
             'server' => Tool::str('Name of the server it runs on (use this OR address).'),
             'address' => Tool::str('Its own IP/host name when it is not on a listed server (use this OR server).'),
@@ -133,8 +135,8 @@ final class CatalogTools
             new Tool('get_settings', 'Get settings', 'Current settings: title, check interval/timeout, SSH defaults, registration mode and per-screen visibility.',
                 [], [], 'read', true, false, fn () => ['settings' => SettingsInput::current()]),
 
-            new Tool('export_yaml', 'Export configuration as YAML', 'The whole configuration (settings, servers, services) in the LabMan YAML format.',
-                [], [], 'read', true, false, fn () => ['yaml' => YamlConfig::export()]),
+            new Tool('export_yaml', 'Export configuration as YAML', 'The whole configuration (settings, servers, services) in the LabMan YAML format. With suggest_domains, items without a local domain get a suggested one (built from the name under the default local domain); nothing is saved.',
+                ['suggest_domains' => Tool::bool('Suggest local domains for items that have none (default false).')], [], 'read', true, false, fn (array $a) => ['yaml' => YamlConfig::export((bool) ($a['suggest_domains'] ?? false))]),
 
             // ----------------------------------------------------------------- admin
             new Tool('run_health_check', 'Run a health check now', 'Run one health-check round immediately (every server and service) and return the new states. Takes up to a couple of timeouts.',

@@ -4,6 +4,7 @@ namespace App\Domain;
 
 use App\Models\Service;
 use App\Rules\Check;
+use App\Support\Domains;
 use App\Support\ExpectRange;
 use Illuminate\Support\Facades\Validator as ValidatorFacade;
 use Illuminate\Validation\Rule;
@@ -23,6 +24,15 @@ final class ServiceInput
      */
     public static function prepare(array $in, bool $form = false): array
     {
+        // The form posts lists of names; the first of each kind is the primary one, the rest are kept as extras.
+        if (is_array($in['local_domains'] ?? null) || is_array($in['public_domains'] ?? null)) {
+            $in = array_merge($in, Domains::fromLists((array) ($in['local_domains'] ?? []), (array) ($in['public_domains'] ?? [])));
+        }
+        unset($in['local_domains'], $in['public_domains']);
+        if (array_key_exists('extra_domains', $in)) {
+            $in['extra_domains'] = Domains::extras($in['extra_domains']);
+        }
+
         if (! isset($in['path']) || $in['path'] === '') {
             $in['path'] = '/';
         }
@@ -54,6 +64,11 @@ final class ServiceInput
             'name' => ['required', 'string', 'max:100', Rule::unique('services', 'name')->ignore($ignore)],
             'domain' => ['nullable', 'string', 'max:253', Check::hostname()],
             'public_domain' => ['nullable', 'string', 'max:253', Check::hostname(), 'different:domain'],
+            'extra_domains' => ['nullable', 'array'],
+            'extra_domains.local' => ['array', 'max:20'],
+            'extra_domains.local.*' => ['string', 'max:253', Check::hostname()],
+            'extra_domains.public' => ['array', 'max:20'],
+            'extra_domains.public.*' => ['string', 'max:253', Check::hostname()],
             'server_id' => ['nullable', 'integer', 'exists:servers,id'],
             'address' => ['nullable', 'string', 'max:253', Check::hostOrIp()],
             'port' => ['nullable', 'integer', 'between:1,65535'],
@@ -92,6 +107,7 @@ final class ServiceInput
         $validated['health_path'] = filled($validated['health_path'] ?? null) ? $validated['health_path'] : null;
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
         $validated['public_domain'] = filled($validated['public_domain'] ?? null) ? strtolower($validated['public_domain']) : null;
+        $validated['extra_domains'] = Domains::cleanExtras($validated['extra_domains'] ?? null, [$validated['domain'] ?? null, $validated['public_domain']]);
 
         return $validated;
     }
@@ -128,6 +144,7 @@ final class ServiceInput
             'name' => $service->name,
             'domain' => $service->domain,
             'public_domain' => $service->public_domain,
+            'extra_domains' => $service->extra_domains,
             'server_id' => $service->server_id,
             'address' => $service->address,
             'port' => $service->port,

@@ -13,7 +13,7 @@ class Service extends Model
     protected $fillable = [
         'name', 'domain', 'server_id', 'address', 'port', 'scheme', 'path', 'group',
         'expect', 'verify_tls', 'public_check', 'websockets', 'notes', 'npm_host_id',
-        'health_path', 'monitor', 'check_tcp', 'icon', 'public_domain', 'npm_public_host_id',
+        'health_path', 'monitor', 'check_tcp', 'icon', 'public_domain', 'npm_public_host_id', 'extra_domains',
     ];
 
     /** Defaults for new models (the database defaults are older than the current ones). */
@@ -27,6 +27,7 @@ class Service extends Model
     {
         return [
             'port' => 'integer',
+            'extra_domains' => 'array',
             'verify_tls' => 'boolean',
             'public_check' => 'boolean',
             'websockets' => 'boolean',

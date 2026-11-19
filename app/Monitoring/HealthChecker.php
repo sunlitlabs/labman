@@ -226,13 +226,18 @@ class HealthChecker
      */
     private function domainChecks(Service $service): array
     {
+        $names = \App\Support\Domains::namesOf($service);
+        $path = $service->path;
         $out = [];
 
-        if ($service->domain) {
-            $out[$service->public_domain ? 'local' : 'public'] = $service->localUrl();
+        // A lone name keeps the label it always had ("public"); with several, they are "local", "local 2", "public", ...
+        if (count($names['local']) === 1 && $names['public'] === []) {
+            return ['public' => 'https://'.$names['local'][0].$path];
         }
-        if ($service->public_domain) {
-            $out['public'] = $service->publicDomainUrl();
+        foreach ($names as $scope => $list) {
+            foreach ($list as $i => $name) {
+                $out[$i === 0 ? $scope : $scope.' '.($i + 1)] = 'https://'.$name.$path;
+            }
         }
 
         return $out;

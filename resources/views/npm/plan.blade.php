@@ -64,7 +64,7 @@
                 @endforeach
             </div>
 
-            <div class="actions plan-actions">
+            <div class="savebar plan-actions">
                 @if ($actionable->isNotEmpty())
                     <button class="primary" type="submit">{{ $isImport ? 'Apply ticked changes to LabMan' : 'Write ticked changes to NPM' }}</button>
                 @else

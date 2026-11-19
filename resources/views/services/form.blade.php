@@ -22,17 +22,20 @@
                         <label for="group">Group <span class="hint">optional heading</span></label>
                         <input id="group" name="group" type="text" maxlength="60" value="{{ old('group', $service->group) }}">
                     </div>
-                    @php($localHint = \App\Support\Domains::local()[0] ?? null)
-                    @php($publicHint = \App\Support\Domains::public()[0] ?? null)
+                </div>
+                @php($names = \App\Support\Domains::namesOf($service))
+                @php($localDefault = \App\Support\Domains::defaultFor('local'))
+                @php($publicDefault = \App\Support\Domains::defaultFor('public'))
+                <div class="grid2">
                     <div class="field">
-                        <label for="domain">{{ $publicHint || $localHint ? 'Local domain' : 'Domain' }} <span class="hint">optional; clicking the service opens it</span></label>
-                        <input id="domain" name="domain" type="text" maxlength="253" placeholder="wiki.{{ $localHint ?? 'example.com' }}" value="{{ old('domain', $service->domain) }}">
+                        <label>{{ $localDefault || $publicDefault ? 'Local domains' : 'Domains' }} <span class="hint">optional; the first is primary and is what clicking the service opens</span></label>
+                        @include('partials.listedit', ['name' => 'local_domains', 'values' => old('local_domains', $names['local']), 'placeholder' => 'wiki.'.($localDefault ?? 'example.com'), 'addLabel' => 'Add local domain', 'suffix' => $localDefault, 'slugFrom' => 'name'])
                     </div>
                     <div class="field">
-                        <label for="public_domain">Public domain <span class="hint">optional second name reachable from the internet</span></label>
-                        <input id="public_domain" name="public_domain" type="text" maxlength="253" placeholder="wiki.{{ $publicHint ?? 'example.org' }}" value="{{ old('public_domain', $service->public_domain) }}">
-                        @unless ($publicHint || $localHint)
-                            <small class="hint">Set your local and public domains under Settings > General to get suggestions and per-domain NPM certificates.</small>
+                        <label>Public domains <span class="hint">optional; names reachable from the internet, each with its own NPM proxy host</span></label>
+                        @include('partials.listedit', ['name' => 'public_domains', 'values' => old('public_domains', $names['public']), 'placeholder' => 'wiki.'.($publicDefault ?? 'example.org'), 'addLabel' => 'Add public domain', 'suffix' => $publicDefault, 'slugFrom' => 'name'])
+                        @unless ($publicDefault || $localDefault)
+                            <small class="hint">Set your domains under Settings > General to get a suggested name when you click Add.</small>
                         @endunless
                     </div>
                 </div>
@@ -115,12 +118,8 @@
                         <input id="notes" name="notes" type="text" maxlength="500" value="{{ old('notes', $service->notes) }}">
                     </div>
                     <div class="field">
-                        <label for="icon">Icon <span class="hint">blank = guess from the name, none = no icon</span></label>
-                        <input id="icon" name="icon" type="text" maxlength="80" autocomplete="off" list="icon-list" data-suggest-url="{{ route('icons.search') }}" value="{{ old('icon', $service->icon) }}">
-                        <datalist id="icon-list"></datalist>
-                        @if ($service->exists && ! $service->icon && ($auto = \App\Icons\Icons::slugFor($service)))
-                            <small class="hint">Currently matched from the name: {{ $auto }}</small>
-                        @endif
+                        <label>Icon <span class="hint">matched from the name unless you pick one</span></label>
+                        @include('partials.iconpick', ['model' => $service, 'value' => old('icon', $service->icon)])
                     </div>
                 </div>
                 @foreach (['verify_tls' => 'Verify the certificate of the public check', 'websockets' => 'Uses websockets (informational; synced with NPM)'] as $flag => $text)

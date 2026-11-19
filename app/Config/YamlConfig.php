@@ -4,6 +4,8 @@ namespace App\Config;
 
 use App\Models\Server;
 use App\Models\Service;
+use App\Support\DomainSuggestions;
+use App\Support\Domains;
 use App\Support\ExpectRange;
 use App\Support\Hosts;
 use App\Support\Settings;
@@ -95,8 +97,10 @@ final class YamlConfig
         return ['servers' => count($config['servers']), 'services' => count($config['services']), 'removed' => $removed];
     }
 
-    public static function export(): string
+    public static function export(bool $suggestLocalDomains = false): string
     {
+        $suggested = $suggestLocalDomains ? DomainSuggestions::all() : ['services' => [], 'servers' => []];
+
         Settings::flush();
 
         $settings = array_filter([
@@ -114,7 +118,8 @@ final class YamlConfig
         $servers = Server::query()->orderBy('group')->orderBy('name')->get()->map(fn (Server $s) => array_filter([
             'name' => $s->name,
             'address' => $s->address,
-            'domain' => $s->domain,
+            'domain' => $s->domain ?: ($suggested['servers'][$s->id] ?? null),
+            'extra_domains' => self::extraList($s),
             'group' => $s->group,
             'ports' => $s->ports ?: null,
             'ssh_user' => $s->ssh_user,
@@ -127,8 +132,9 @@ final class YamlConfig
 
         $services = Service::query()->with('server')->orderBy('group')->orderBy('name')->get()->map(fn (Service $s) => array_filter([
             'name' => $s->name,
-            'domain' => $s->domain,
+            'domain' => $s->domain ?: ($suggested['services'][$s->id] ?? null),
             'public_domain' => $s->public_domain,
+            'extra_domains' => self::extraList($s),
             'server' => $s->server?->name,
             'address' => $s->server ? null : $s->address,
             'port' => $s->port,
@@ -346,6 +352,7 @@ final class YamlConfig
                 $errors[] = "{$who}: 'ssh_user' may only contain letters, digits, '_', '.' and '-' and must not start with '-'";
             }
 
+            $extraDomains = self::extraDomains($who, $item, $errors);
             $flags = self::flags($who, $item, ['monitor' => true, 'check_ssh' => true], $errors);
             $icon = self::icon($who, $item, $errors);
 
@@ -365,6 +372,7 @@ final class YamlConfig
                     'notes' => $notes ?: null,
                     'monitor' => $flags['monitor'],
                     'check_ssh' => $flags['check_ssh'],
+                    'extra_domains' => $extraDomains,
                     'icon' => $icon,
                 ];
             }
@@ -440,6 +448,7 @@ final class YamlConfig
                 $errors[] = "{$who}: 'domain' must be a host name, not '{$domain}'";
             }
 
+            $extraDomains = self::extraDomains($who, $item, $errors);
             $publicDomain = self::text($item['public_domain'] ?? null);
             if ($publicDomain !== null && $publicDomain !== '') {
                 $publicDomain = mb_strtolower($publicDomain);
@@ -510,6 +519,7 @@ final class YamlConfig
                     'name' => $name,
                     'domain' => $domain ?: null,
                     'public_domain' => $publicDomain ?: null,
+                    'extra_domains' => $extraDomains,
                     'server' => $hasServer ? $server : null,
                     'address' => $hasAddress ? $address : null,
                     'port' => $port,
@@ -572,6 +582,40 @@ final class YamlConfig
         }
 
         return strtolower($icon);
+    }
+
+    /** @return list<string>|null */
+    private static function extraList($item): ?array
+    {
+        $extra = Domains::extras($item->extra_domains);
+
+        return ($extra['local'] || $extra['public']) ? array_merge($extra['local'], $extra['public']) : null;
+    }
+
+    /**
+     * Read `extra_domains` (a list of host names) from an entry; returns the stored shape.
+     *
+     * @param  list<string>  $errors
+     * @return array{local: list<string>, public: list<string>}|null
+     */
+    private static function extraDomains(string $who, array $item, array &$errors): ?array
+    {
+        if (! array_key_exists('extra_domains', $item) || $item['extra_domains'] === null) {
+            return null;
+        }
+        if (! is_array($item['extra_domains']) || ! array_is_list($item['extra_domains'])) {
+            $errors[] = "{$who}: 'extra_domains' must be a list of host names";
+
+            return null;
+        }
+        $names = Domains::parse($item['extra_domains']);
+        if (($bad = Domains::firstInvalid($names)) !== null) {
+            $errors[] = "{$who}: 'extra_domains' has an entry that is not a host name: '{$bad}'";
+
+            return null;
+        }
+
+        return Domains::cleanExtras($names, [$item['domain'] ?? null, $item['public_domain'] ?? null]);
     }
 
     private static function text(mixed $value): ?string

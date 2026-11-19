@@ -26,9 +26,11 @@
                         <label for="address">Address <span class="hint">IP or host name that is checked</span></label>
                         <input id="address" name="address" type="text" required maxlength="253" placeholder="192.0.2.10" value="{{ old('address', $server->address) }}">
                     </div>
+                    @php($names = \App\Support\Domains::namesOf($server))
+                    @php($localDefault = \App\Support\Domains::defaultFor('local'))
                     <div class="field">
-                        <label for="domain">Domain <span class="hint">optional</span></label>
-                        <input id="domain" name="domain" type="text" maxlength="253" placeholder="nas.example.com" value="{{ old('domain', $server->domain) }}">
+                        <label>Domains <span class="hint">optional; the first is primary (used by Copy SSH when set to connect by domain)</span></label>
+                        @include('partials.listedit', ['name' => 'local_domains', 'values' => old('local_domains', $names['local']), 'placeholder' => 'nas.'.($localDefault ?? 'example.com'), 'addLabel' => 'Add domain', 'suffix' => $localDefault, 'slugFrom' => 'name'])
                     </div>
                 </div>
             </section>
@@ -75,12 +77,8 @@
                         <input id="notes" name="notes" type="text" maxlength="500" value="{{ old('notes', $server->notes) }}">
                     </div>
                     <div class="field">
-                        <label for="icon">Icon <span class="hint">blank = guess from the name, none = no icon</span></label>
-                        <input id="icon" name="icon" type="text" maxlength="80" autocomplete="off" list="icon-list" data-suggest-url="{{ route('icons.search') }}" value="{{ old('icon', $server->icon) }}">
-                        <datalist id="icon-list"></datalist>
-                        @if ($server->exists && ! $server->icon && ($auto = \App\Icons\Icons::slugFor($server)))
-                            <small class="hint">Currently matched from the name: {{ $auto }}</small>
-                        @endif
+                        <label>Icon <span class="hint">matched from the name unless you pick one</span></label>
+                        @include('partials.iconpick', ['model' => $server, 'value' => old('icon', $server->icon)])
                     </div>
                 </div>
             </details>
