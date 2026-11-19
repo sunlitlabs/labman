@@ -76,19 +76,10 @@ final class Connection
      */
     public static function cleanUrl(string $url): string
     {
-        $parts = parse_url(trim($url));
-
-        if ($parts === false || ! in_array($parts['scheme'] ?? '', ['http', 'https'], true) || empty($parts['host'])
-            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
-            || (isset($parts['path']) && trim($parts['path'], '/') !== '')) {
-            throw new NpmException('Enter the NPM admin address as http(s)://host[:port], for example http://192.0.2.5:81.');
+        try {
+            return \App\Support\BaseUrl::clean($url, 'http://192.0.2.5:81');
+        } catch (\InvalidArgumentException $e) {
+            throw new NpmException($e->getMessage());
         }
-
-        $host = trim($parts['host'], '[]');
-        if (! \App\Support\Hosts::isHostOrIp($host)) {
-            throw new NpmException("'{$host}' is not a valid host name or IP address.");
-        }
-
-        return $parts['scheme'].'://'.\App\Support\Hosts::forUrl($host).(isset($parts['port']) ? ':'.$parts['port'] : '');
     }
 }

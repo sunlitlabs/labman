@@ -45,6 +45,16 @@ return [
         'allowed_origins' => env('LABMAN_MCP_ALLOWED_ORIGINS', ''),
     ],
 
+    /*
+    | Git (inventory sync). Only http(s) remotes are accepted. LABMAN_GIT_ALLOW_LOCAL lets tests use
+    | local file remotes; never enable it in production.
+    */
+    'git' => [
+        'allow_local' => (bool) env('LABMAN_GIT_ALLOW_LOCAL', false),
+        'timeout' => 90,
+        'askpass' => base_path('docker/git-askpass.sh'),
+    ],
+
     'limits' => [
         'check_interval_min' => 5,
         'timeout_min' => 0.5,

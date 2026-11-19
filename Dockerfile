@@ -12,6 +12,8 @@ FROM dunglas/frankenphp:1-php${PHP_VERSION}-alpine AS base
 # pdo_sqlite is the default database; pdo_mysql / pdo_pgsql make the other two selectable via env.
 # pcntl lets the monitor stop cleanly on SIGTERM; sockets gives exact TCP failure reasons.
 RUN install-php-extensions pdo_sqlite pdo_mysql pdo_pgsql pcntl sockets opcache
+# git: inventory sync clones, commits and pushes to the repository Semaphore reads its inventory from.
+RUN apk add --no-cache git
 WORKDIR /app
 
 # ---------------------------------------------------------------- vendor (runtime deps only)
@@ -39,6 +41,7 @@ RUN composer dump-autoload --optimize --no-scripts --ignore-platform-reqs
 FROM base AS test
 COPY --from=vendor-dev /app/vendor ./vendor
 COPY . .
+RUN chmod +x docker/git-askpass.sh
 ENV APP_ENV=testing
 CMD ["vendor/bin/phpunit"]
 
@@ -71,7 +74,7 @@ RUN addgroup -S -g 10001 labman \
  && rm -f .env \
  && php artisan package:discover --ansi \
  && chown -R labman:labman /data bootstrap/cache \
- && chmod +x /usr/local/bin/labman-entrypoint \
+ && chmod +x /usr/local/bin/labman-entrypoint docker/git-askpass.sh \
  && (setcap -r /usr/local/bin/frankenphp || true)
 
 USER labman

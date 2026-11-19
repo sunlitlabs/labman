@@ -8,6 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <link rel="stylesheet" href="{{ asset('css/labman.css') }}">
     <script src="{{ asset('js/labman.js') }}" defer></script>
+    @stack('scripts')
 </head>
 <body @yield('body_attrs')>
 <header class="top">
@@ -28,6 +29,8 @@
                 <a href="{{ route('users.index') }}" @if(request()->routeIs('users.*')) aria-current="page" @endif>Users</a>
             @endcan
             @can('admin')
+                <a href="{{ route('inventory.index') }}" @if(request()->routeIs('inventory.*')) aria-current="page" @endif>Inventory</a>
+                <a href="{{ route('semaphore.index') }}" @if(request()->routeIs('semaphore.*')) aria-current="page" @endif>Semaphore</a>
                 <a href="{{ route('npm.index') }}" @if(request()->routeIs('npm.*')) aria-current="page" @endif>NPM</a>
             @endcan
         </nav>

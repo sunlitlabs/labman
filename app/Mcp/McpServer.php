@@ -33,7 +33,12 @@ final class McpServer
     /** @return list<Tool> */
     public static function registry(): array
     {
-        return array_merge(CatalogTools::all(), \App\Mcp\Tools\NpmTools::all());
+        return array_merge(
+            CatalogTools::all(),
+            \App\Mcp\Tools\NpmTools::all(),
+            \App\Mcp\Tools\InventoryTools::all(),
+            \App\Mcp\Tools\SemaphoreTools::all(),
+        );
     }
 
     /**

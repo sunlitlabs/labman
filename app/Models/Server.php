@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Server extends Model
 {
     protected $fillable = [
-        'name', 'address', 'domain', 'group', 'ports', 'ssh_user', 'ssh_port', 'notes',
+        'name', 'address', 'domain', 'group', 'ports', 'ssh_user', 'ssh_port', 'notes', 'inventory_host',
     ];
 
     protected function casts(): array

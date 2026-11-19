@@ -4,7 +4,9 @@ use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\NpmController;
+use App\Http\Controllers\SemaphoreController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\SettingsController;
@@ -41,6 +43,23 @@ Route::middleware('admin')->group(function () {
     Route::resource('servers', ServerController::class)->except(['index', 'show']);
     Route::resource('users', UserController::class)->except(['index', 'show', 'destroy']);
     Route::post('/users/{user}/approve', [UserController::class, 'approve'])->name('users.approve');
+
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::post('/inventory/connection', [InventoryController::class, 'connect'])->name('inventory.connect');
+    Route::delete('/inventory/connection', [InventoryController::class, 'disconnect'])->name('inventory.disconnect');
+    Route::get('/inventory/compare', [InventoryController::class, 'compare'])->name('inventory.compare');
+    Route::post('/inventory/review', [InventoryController::class, 'review'])->name('inventory.review');
+    Route::post('/inventory/apply', [InventoryController::class, 'apply'])->name('inventory.apply');
+
+    Route::get('/semaphore', [SemaphoreController::class, 'index'])->name('semaphore.index');
+    Route::post('/semaphore/connection', [SemaphoreController::class, 'connect'])->name('semaphore.connect');
+    Route::delete('/semaphore/connection', [SemaphoreController::class, 'disconnect'])->name('semaphore.disconnect');
+    Route::get('/semaphore/run', [SemaphoreController::class, 'runForm'])->name('semaphore.run');
+    Route::post('/semaphore/run/confirm', [SemaphoreController::class, 'runConfirm'])->name('semaphore.run.confirm');
+    Route::post('/semaphore/run', [SemaphoreController::class, 'runStart'])->name('semaphore.run.start');
+    Route::get('/semaphore/tasks/{project}/{task}', [SemaphoreController::class, 'task'])->whereNumber(['project', 'task'])->name('semaphore.task');
+    Route::get('/semaphore/tasks/{project}/{task}/status', [SemaphoreController::class, 'taskStatus'])->whereNumber(['project', 'task'])->name('semaphore.task.status');
+    Route::post('/semaphore/tasks/{project}/{task}/stop', [SemaphoreController::class, 'taskStop'])->whereNumber(['project', 'task'])->name('semaphore.task.stop');
 
     Route::get('/npm', [NpmController::class, 'index'])->name('npm.index');
     Route::post('/npm/connection', [NpmController::class, 'connect'])->name('npm.connect');
