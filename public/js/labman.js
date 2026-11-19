@@ -65,6 +65,19 @@
     }
   });
 
+  // A long action (a push to git, a sync) says what it is doing and cannot be double-submitted.
+  document.addEventListener('submit', function (e) {
+    var btn = e.target.querySelector && e.target.querySelector('button[data-busy]');
+    if (!btn || e.defaultPrevented) return;
+    var status = document.createElement('p');
+    status.className = 'muted busy-note';
+    status.setAttribute('role', 'status');
+    status.textContent = btn.getAttribute('data-busy') + ' This can take a few seconds.';
+    btn.parentNode.appendChild(status);
+    btn.textContent = btn.getAttribute('data-busy');
+    window.setTimeout(function () { btn.disabled = true; }, 0);
+  });
+
   // Destructive buttons carry data-confirm (inline handlers are blocked by the CSP).
   document.addEventListener('click', function (e) {
     var btn = e.target.closest && e.target.closest('button[data-confirm]');

@@ -121,9 +121,9 @@ final class InventorySync
      *
      * @throws InventoryException
      */
-    public function review(array $choices, bool $deleteOld = false): array
+    public function review(array $choices, bool $deleteOld = false, bool $convert = false): array
     {
-        $built = $this->build($choices, $deleteOld);
+        $built = $this->build($choices, $deleteOld, $convert);
 
         $diff = ($built['writes'] || $built['deletes']) ? $this->repo()->preview($built['writes'], $built['deletes']) : '';
 
@@ -147,9 +147,9 @@ final class InventorySync
      *
      * @throws InventoryException
      */
-    public function apply(array $choices, string $fingerprint, bool $deleteOld = false): array
+    public function apply(array $choices, string $fingerprint, bool $deleteOld = false, bool $convert = false): array
     {
-        $built = $this->build($choices, $deleteOld);
+        $built = $this->build($choices, $deleteOld, $convert);
 
         if (! hash_equals($built['fingerprint'], $fingerprint)) {
             throw new InventoryException('The inventory or LabMan changed since you reviewed these changes, so nothing was applied. Compare again.');
@@ -253,7 +253,7 @@ final class InventorySync
      * @param  array<string, array<string, mixed>>  $choices
      * @return array<string, mixed>
      */
-    private function build(array $choices, bool $deleteOld): array
+    private function build(array $choices, bool $deleteOld, bool $wantConvert = false): array
     {
         $choices = self::normalize($choices);
         [$head, $inventory, $content] = $this->load();
@@ -363,7 +363,10 @@ final class InventorySync
         $deletes = [];
         $convert = null;
 
-        if ($inventoryChanged) {
+        // Asking to create the YAML file (or to delete the INI one) is a change on its own, even when no host changes.
+        $convertNow = $inventory->format === 'ini' && ($wantConvert || $deleteOld);
+
+        if ($inventoryChanged || $convertNow) {
             $target = $this->config['path'];
 
             if ($inventory->format === 'ini') {
@@ -389,7 +392,7 @@ final class InventorySync
         $messageLines = array_values(array_unique($inventoryLines));
         $message = "Update inventory from LabMan\n\n".($messageLines ? '- '.implode("\n- ", $messageLines)."\n" : '');
 
-        $fingerprint = sha1(json_encode([$head, $this->config['path'], $choices, $deleteOld, $writes, $deletes, $ops]));
+        $fingerprint = sha1(json_encode([$head, $this->config['path'], $choices, $deleteOld, $convertNow, $writes, $deletes, $ops]));
 
         return [
             'head' => $head, 'writes' => $writes, 'deletes' => $deletes, 'ops' => $ops, 'convert' => $convert,

@@ -33,6 +33,8 @@
         </div>
     @endif
 
+    @if ($connection) @include('inventory.status', ['last' => $last]) @endif
+
     @php($open = $connection || $errors->hasAny(['path', 'branch', 'username']) || old('path') || old('branch'))
     <form class="formcard" method="POST" action="{{ route('inventory.connect') }}" id="connect-form" data-parse-url="{{ route('inventory.parse') }}">
         @csrf

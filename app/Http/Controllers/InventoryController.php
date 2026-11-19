@@ -8,6 +8,7 @@ use App\Inventory\InventoryException;
 use App\Inventory\InventorySync;
 use App\Inventory\RepoConfig;
 use App\Inventory\RepoUrl;
+use App\Inventory\SyncStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class InventoryController extends Controller
 {
     public function index()
     {
-        return view('inventory.index', ['connection' => RepoConfig::summary()]);
+        return view('inventory.index', ['connection' => RepoConfig::summary(), 'last' => SyncStatus::last()]);
     }
 
     public function connect(Request $request): RedirectResponse
@@ -73,16 +74,17 @@ class InventoryController extends Controller
             return redirect()->route('inventory.index')->withErrors(['inventory' => $e->getMessage()]);
         }
 
-        return view('inventory.compare', ['plan' => $plan, 'old' => session()->getOldInput()]);
+        return view('inventory.compare', ['plan' => $plan, 'old' => session()->getOldInput(), 'last' => SyncStatus::last()]);
     }
 
     public function review(Request $request)
     {
         $choices = ChoiceForm::fromRequest($request);
         $deleteOld = $request->boolean('delete_old');
+        $convert = $request->boolean('convert');
 
         try {
-            $review = InventorySync::fromStored()->review($choices, $deleteOld);
+            $review = InventorySync::fromStored()->review($choices, $deleteOld, $convert);
         } catch (InventoryException $e) {
             return redirect()->route('inventory.compare')->withErrors(['inventory' => $e->getMessage()])->withInput($request->except('_token'));
         }
@@ -91,6 +93,7 @@ class InventoryController extends Controller
             'review' => $review,
             'choices' => ChoiceForm::toJson($choices),
             'deleteOld' => $deleteOld,
+            'convert' => $convert,
             'repo' => RepoConfig::summary(),
         ]);
     }
@@ -99,11 +102,17 @@ class InventoryController extends Controller
     {
         $data = $request->validate(['choices' => ['required', 'string', 'max:200000'], 'fingerprint' => ['required', 'string', 'size:40']]);
 
+        $where = RepoConfig::summary() ?? ['branch' => '', 'path' => ''];
+
         try {
-            $result = InventorySync::fromStored()->apply(ChoiceForm::fromJson($data['choices']), $data['fingerprint'], $request->boolean('delete_old'));
+            $result = InventorySync::fromStored()->apply(ChoiceForm::fromJson($data['choices']), $data['fingerprint'], $request->boolean('delete_old'), $request->boolean('convert'));
         } catch (InventoryException $e) {
+            SyncStatus::failed($e->getMessage(), $where['branch'], $where['path']);
+
             return redirect()->route('inventory.compare')->withErrors(['inventory' => $e->getMessage()]);
         }
+
+        SyncStatus::succeeded($result, $where['branch'], $where['path']);
 
         $parts = [];
         if ($result['pushed']) {

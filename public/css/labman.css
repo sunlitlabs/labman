@@ -484,3 +484,7 @@ details.formcard > summary { cursor: pointer; font-weight: 600; }
 .iconpick-list small { color: var(--muted); }
 .pick-img { width: 24px; height: 24px; object-fit: contain; flex: none; background: #fff; border-radius: 5px; padding: 2px; }
 .iconpick-note { margin: 6px 4px 0; font-size: 0.85rem; }
+
+.sync-status { margin: 0 0 16px; }
+.sync-status h2 { display: flex; align-items: center; gap: 10px; }
+.busy-note { margin: 8px 0 0; }

@@ -558,6 +558,30 @@ YAML);
         $sync->apply($choices, $review['fingerprint'], deleteOld: false);
     }
 
+    public function test_the_yaml_file_can_be_created_without_any_host_change(): void
+    {
+        $sync = $this->seedRepo(self::INI, 'inventory/hosts.ini');
+
+        $review = $sync->review([], convert: true);
+        $this->assertTrue($review['changes']);
+        $this->assertSame('inventory/hosts.yml', $review['convert']['to']);
+        $sync->apply([], $review['fingerprint'], convert: true);
+
+        $this->assertNotNull($this->remote->remoteFile('inventory/hosts.yml'));
+        $this->assertNotNull($this->remote->remoteFile('inventory/hosts.ini'), 'kept unless deletion is chosen');
+    }
+
+    public function test_deleting_the_old_file_works_without_any_host_change(): void
+    {
+        $sync = $this->seedRepo(self::INI, 'inventory/hosts.ini');
+
+        $review = $sync->review([], deleteOld: true);
+        $sync->apply([], $review['fingerprint'], deleteOld: true);
+
+        $this->assertNull($this->remote->remoteFile('inventory/hosts.ini'));
+        $this->assertNotNull($this->remote->remoteFile('inventory/hosts.yml'));
+    }
+
     public function test_conversion_is_refused_when_the_yaml_file_already_exists(): void
     {
         $sync = $this->seedRepo(self::INI, 'inventory/hosts.ini');

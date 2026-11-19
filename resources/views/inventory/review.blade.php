@@ -74,7 +74,8 @@
             <input type="hidden" name="choices" value="{{ $choices }}">
             <input type="hidden" name="fingerprint" value="{{ $review['fingerprint'] }}">
             @if ($deleteOld) <input type="hidden" name="delete_old" value="1"> @endif
-            <button class="primary" type="submit">{{ $review['diff'] ? 'Commit, push and apply' : 'Apply to LabMan' }}</button>
+            @if ($convert) <input type="hidden" name="convert" value="1"> @endif
+            <button class="primary" type="submit" data-busy="{{ $review['diff'] ? 'Pushing to the repository…' : 'Applying…' }}">{{ $review['diff'] ? 'Commit, push and apply' : 'Apply to LabMan' }}</button>
             <a class="btn" href="{{ route('inventory.compare') }}">Back and change choices</a>
         </form>
     @endif

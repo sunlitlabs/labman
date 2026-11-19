@@ -70,13 +70,13 @@ final class InventoryTools
                 })),
 
             new Tool('inventory_review', 'Review inventory sync choices', 'Read-only. Turn the user\'s choices into the exact result: the git diff that would be pushed, the LabMan changes, the commit message and a fingerprint. Show the diff to the user and get approval before inventory_apply. An INI inventory is converted to a YAML file when written; delete_old also removes the INI file (Semaphore must then be pointed at the YAML file).',
-                ['choices' => self::CHOICES, 'delete_old' => Tool::bool('When converting INI to YAML, also delete the old INI file in the same commit. Default false.')],
-                ['choices'], 'admin', true, false, fn (array $a) => self::guard(fn () => InventorySync::fromStored()->review((array) $a['choices'], (bool) ($a['delete_old'] ?? false)))),
+                ['choices' => self::CHOICES, 'delete_old' => Tool::bool('When converting INI to YAML, also delete the old INI file in the same commit. Implies convert. Default false.'), 'convert' => Tool::bool('For an INI inventory, create the YAML file even when no host changes. Default false.')],
+                ['choices'], 'admin', true, false, fn (array $a) => self::guard(fn () => InventorySync::fromStored()->review((array) $a['choices'], (bool) ($a['delete_old'] ?? false), (bool) ($a['convert'] ?? false)))),
 
             new Tool('inventory_apply', 'Apply reviewed inventory sync', 'WRITES: commits and pushes the reviewed inventory change to the git repository, then updates LabMan (create/update/delete servers). Pass the same choices and delete_old as the review, and its fingerprint. Refused, with nothing applied, if the repository or LabMan changed since the review.',
-                ['choices' => self::CHOICES, 'fingerprint' => Tool::str('The fingerprint returned by inventory_review.'), 'delete_old' => Tool::bool('Same value as in the review.')],
+                ['choices' => self::CHOICES, 'fingerprint' => Tool::str('The fingerprint returned by inventory_review.'), 'delete_old' => Tool::bool('Same value as in the review.'), 'convert' => Tool::bool('Same value as in the review.')],
                 ['choices', 'fingerprint'], 'admin', false, true,
-                fn (array $a) => self::guard(fn () => InventorySync::fromStored()->apply((array) $a['choices'], (string) $a['fingerprint'], (bool) ($a['delete_old'] ?? false)))),
+                fn (array $a) => self::guard(fn () => InventorySync::fromStored()->apply((array) $a['choices'], (string) $a['fingerprint'], (bool) ($a['delete_old'] ?? false), (bool) ($a['convert'] ?? false)))),
         ];
     }
 

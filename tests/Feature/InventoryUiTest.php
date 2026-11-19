@@ -189,6 +189,25 @@ class InventoryUiTest extends TestCase
         $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
     }
 
+    public function test_the_last_push_is_recorded_and_shown_and_the_yaml_can_be_created_on_its_own(): void
+    {
+        $remote = TempRepo::create(['inventory/hosts.ini' => "[web]\nweb1 ansible_host=192.0.2.11\n"]);
+        $this->actingAs($this->admin)->post('/inventory/connection', $this->form(['repo_url' => $remote->remote, 'path' => 'inventory/hosts.ini']))->assertSessionHasNoErrors();
+
+        $page = $this->post('/inventory/review', ['convert' => 1, 'delete_old' => 1])->assertOk()->assertSee('name="convert"', false)->assertSee('data-busy', false)->getContent();
+        preg_match('/name="fingerprint" value="([0-9a-f]{40})"/', $page, $f);
+        $this->post('/inventory/apply', ['choices' => '{}', 'fingerprint' => $f[1], 'convert' => 1, 'delete_old' => 1])->assertRedirect(route('inventory.index'));
+
+        $this->assertNull($remote->remoteFile('inventory/hosts.ini'));
+        $this->assertNotNull($remote->remoteFile('inventory/hosts.yml'));
+        $this->get('/inventory')->assertSee('Last sync')->assertSee('pushed');
+
+        $this->post('/inventory/apply', ['choices' => '{}', 'fingerprint' => str_repeat('a', 40)])->assertRedirect(route('inventory.compare'));
+        $this->get('/inventory/compare')->assertSee('Last sync')->assertSee('failed');
+
+        $remote->cleanup();
+    }
+
     public function test_an_ini_inventory_shows_the_conversion_notice(): void
     {
         $remote = TempRepo::create(['inventory/hosts.ini' => "[web]\nweb1 ansible_host=192.0.2.11\n"]);

@@ -41,10 +41,14 @@
             (typed values, nested groups, no quoting surprises), so when you apply changes to the inventory LabMan writes the
             same hosts as YAML to <span class="mono">{{ $plan['convert']['to'] }}</span>. Semaphore keeps using
             <span class="mono">{{ $plan['convert']['from'] }}</span> until you point its inventory at the new file.
+            <label class="check"><input type="checkbox" name="convert" value="1" form="choices-form" @checked($old['convert'] ?? false)>
+                Create <span class="mono">{{ $plan['convert']['to'] }}</span> now, even if no host changes</label>
             <label class="check"><input type="checkbox" name="delete_old" value="1" form="choices-form" @checked($old['delete_old'] ?? false)>
-                Also delete <span class="mono">{{ $plan['convert']['from'] }}</span> in the same commit (only if you will update Semaphore right away)</label>
+                Also delete <span class="mono">{{ $plan['convert']['from'] }}</span> in the same commit (only if you will update Semaphore right away; this creates the YAML file too)</label>
         </div>
     @endif
+
+    @include('inventory.status', ['last' => $last])
 
     @if ($total === 0)
         <div class="card empty">Neither LabMan nor the inventory has any servers yet.</div>
