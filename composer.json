@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "labman/labman",
     "type": "project",
-    "description": "LabMan: a self-hostable heads-up display for a home lab.",
+    "description": "LabMan Homelab Manager: a self-hostable heads-up display and manager for a home lab.",
     "license": "MIT",
     "require": {
         "php": "^8.2",

@@ -1,6 +1,6 @@
-# LabMan
+# LabMan Homelab Manager
 
-A self-hostable **heads-up display for a home lab**. A dashboard to land on, two lists behind it:
+**LabMan Homelab Manager** (LabMan for short) is a self-hostable **heads-up display and manager for a home lab**. A dashboard to land on, two lists behind it:
 
 - **Dashboard** (the home page): an overall "all systems operational / 2 items need attention" banner and a tile per service and server, each with an icon matched from its name. Click a service tile to open it, a server tile to copy its SSH command. Updates live.
 - **Services**: name, domain, backend address and live health. Click one to open it (public URL, else backend URL).
