@@ -12,6 +12,43 @@ use App\Models\Server;
  */
 final class Targets
 {
+    /** The name Semaphore knows this server by (or the name it would be given), for limiting a run to it. */
+    public static function hostFor(Server $server): string
+    {
+        $paired = HostSync::pairings(collect([$server])) ?? [];
+
+        return $paired[$server->id] ?? ($server->inventory_host ?: Slug::host($server->name));
+    }
+
+    /** Every workbook (template) across the projects, for a picker; empty when Semaphore is not connected or cannot be reached. @return list<array{project: int, template: int, label: string}> */
+    public static function workbooks(): array
+    {
+        if (! Connection::exists()) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember('labman.workbooks', 60, function () {
+            try {
+                $client = SemaphoreClient::fromStored();
+                $out = [];
+                foreach ($client->projects() as $p) {
+                    try {
+                        $templates = $client->templates((int) $p['id']);
+                    } catch (SemaphoreException) {
+                        continue; // one project we cannot read does not hide the others
+                    }
+                    foreach ($templates as $t) {
+                        $out[] = ['project' => (int) $p['id'], 'template' => (int) $t['id'], 'label' => ($p['name'] ?? $p['id']).' / '.($t['name'] ?? $t['id'])];
+                    }
+                }
+
+                return $out;
+            } catch (SemaphoreException) {
+                return [];
+            }
+        });
+    }
+
     /** @return array{groups: list<array{name: string, count: int}>, hosts: list<array{name: string, label: string, group: ?string, missing: bool}>, known: bool} */
     public static function all(): array
     {

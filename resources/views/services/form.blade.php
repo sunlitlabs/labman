@@ -110,6 +110,24 @@
                 @endif
             </section>
 
+            <section class="formcard">
+                <h2>Update</h2>
+                <p class="sub">The Semaphore workbook that updates this service (for a Laravel app: pull the new code, install, migrate, rebuild, restart workers). An <strong>Update</strong> button then appears on the service, aimed at its server; you review the run before it starts.</p>
+                @if ($workbooks)
+                    <div class="field">
+                        <label for="update_workbook">Update with</label>
+                        <select id="update_workbook" name="update_workbook">
+                            <option value="">none</option>
+                            @foreach ($workbooks as $w)
+                                <option value="{{ $w['project'] }}:{{ $w['template'] }}" @selected(old('update_workbook', $service->update_project.':'.$service->update_template) === $w['project'].':'.$w['template'])>{{ $w['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                @else
+                    <p class="hint">Connect Semaphore (Admin > Semaphore) to pick a workbook here.</p>
+                @endif
+            </section>
+
             <details class="formcard" @if (old('notes', $service->notes) || old('icon', $service->icon) || ! old('verify_tls', $service->verify_tls) || old('websockets', $service->websockets)) open @endif>
                 <summary>More: notes, icon, TLS, websockets</summary>
                 <div class="grid2">

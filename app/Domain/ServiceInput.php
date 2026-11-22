@@ -33,6 +33,14 @@ final class ServiceInput
             $in['extra_domains'] = Domains::extras($in['extra_domains']);
         }
 
+        // The form posts one choice, "project:template"; blank clears it.
+        if (array_key_exists('update_workbook', $in)) {
+            [$project, $template] = array_pad(array_map('intval', explode(':', (string) $in['update_workbook'])), 2, 0);
+            $in['update_project'] = $project > 0 && $template > 0 ? $project : null;
+            $in['update_template'] = $project > 0 && $template > 0 ? $template : null;
+            unset($in['update_workbook']);
+        }
+
         if (! isset($in['path']) || $in['path'] === '') {
             $in['path'] = '/';
         }
@@ -84,6 +92,8 @@ final class ServiceInput
             'monitor' => ['boolean'],
             'check_tcp' => ['boolean'],
             'icon' => ['nullable', 'string', 'max:80', Check::icon()],
+            'update_project' => ['nullable', 'integer', 'min:1'],
+            'update_template' => ['nullable', 'integer', 'min:1', 'required_with:update_project'],
         ];
     }
 
@@ -160,6 +170,8 @@ final class ServiceInput
             'monitor' => $service->monitor,
             'check_tcp' => $service->check_tcp,
             'icon' => $service->icon,
+            'update_project' => $service->update_project,
+            'update_template' => $service->update_template,
         ];
     }
 }

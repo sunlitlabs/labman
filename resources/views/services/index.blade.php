@@ -55,6 +55,7 @@
                             @include('partials.detail', ['item' => $service])
                             <div class="cell actions">
                                 @can('admin')<a href="{{ route('services.edit', $service) }}">Edit</a>@endcan
+                                @if ($service->hasUpdate())@can('admin')<a href="{{ route('services.run-update', $service) }}" title="Run this service's update workbook">Update</a>@endcan @endif
                             </div>
                         </article>
                     @endforeach

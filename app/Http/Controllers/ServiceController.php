@@ -30,6 +30,7 @@ class ServiceController extends Controller
         return view('services.form', [
             'service' => new Service(['scheme' => 'http', 'path' => '/', 'expect' => '200-499', 'verify_tls' => true, 'public_check' => true, 'monitor' => true, 'check_tcp' => true]),
             'servers' => Server::orderBy('name')->get(['id', 'name']),
+            'workbooks' => \App\Semaphore\Targets::workbooks(),
         ]);
     }
 
@@ -40,11 +41,27 @@ class ServiceController extends Controller
         return redirect()->route('services.index')->with('status', 'Service added. Its health appears after the next check round.');
     }
 
+    /** Start this service's update workbook: opens the run form aimed at its server, to be reviewed and confirmed like any run. */
+    public function runUpdate(Service $service): RedirectResponse
+    {
+        if (! $service->hasUpdate()) {
+            return redirect()->route('services.edit', $service)->withErrors(['update_workbook' => 'Choose which workbook updates this service first.']);
+        }
+
+        $query = ['project' => $service->update_project, 'template' => $service->update_template, 'message' => 'Update '.$service->name];
+        if ($service->server) {
+            $query['hosts'] = [\App\Semaphore\Targets::hostFor($service->server)];
+        }
+
+        return redirect()->route('semaphore.run', $query)->with('status', $service->server ? null : 'This service is not linked to a server, so choose where the update runs.');
+    }
+
     public function edit(Service $service)
     {
         return view('services.form', [
             'service' => $service,
             'servers' => Server::orderBy('name')->get(['id', 'name']),
+            'workbooks' => \App\Semaphore\Targets::workbooks(),
         ]);
     }
 

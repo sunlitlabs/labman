@@ -50,6 +50,7 @@ Route::get('/users', [UserController::class, 'index'])->name('users.index')->mid
 Route::middleware('admin')->group(function () {
     Route::get('/icon-search', [IconController::class, 'search'])->name('icons.search');
     Route::get('/services/{service}/diagnose', [ServiceController::class, 'diagnose'])->name('services.diagnose');
+    Route::get('/services/{service}/update', [ServiceController::class, 'runUpdate'])->name('services.run-update');
     Route::post('/services/{service}/diagnose', [ServiceController::class, 'applyDiagnosis'])->name('services.diagnose.apply');
     Route::resource('services', ServiceController::class)->except(['index', 'show']);
     Route::resource('servers', ServerController::class)->except(['index', 'show']);

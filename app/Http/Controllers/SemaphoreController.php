@@ -167,7 +167,7 @@ class SemaphoreController extends Controller
         }
 
         return view('semaphore.run', [
-            'project' => $project, 'template' => $found, 'survey' => SurveyVars::declared($found), 'targets' => Targets::all(), 'old' => session()->getOldInput() + ['hosts' => (array) $request->query('hosts', []), 'groups' => (array) $request->query('groups', [])],
+            'project' => $project, 'template' => $found, 'survey' => SurveyVars::declared($found), 'targets' => Targets::all(), 'old' => session()->getOldInput() + ['hosts' => (array) $request->query('hosts', []), 'groups' => (array) $request->query('groups', []), 'message' => (string) $request->query('message', '')],
         ]);
     }
 

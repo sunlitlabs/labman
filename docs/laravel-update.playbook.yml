@@ -1,0 +1,62 @@
+# An example Ansible playbook for updating a Laravel app that runs from a git checkout. Use it as a Semaphore
+# template, then pick that template as the service's "Update with" workbook in LabMan.
+#
+# Everything here is a placeholder: set the variables for your app, and make the hosts line match the
+# machine (or group) LabMan limits the run to. Nothing in it is specific to any one app.
+#
+# The steps are the ones a Laravel release needs: pull, install PHP packages without dev tools, build the
+# assets, migrate, rebuild the caches, and restart the queue workers so they pick up the new code.
+- name: Update a Laravel app
+  hosts: all
+  gather_facts: false
+  vars:
+    app_path: /var/www/example-app        # the git checkout on the server
+    app_user: www-data                    # the user that owns it
+    php_bin: php
+    build_assets: true                    # false if public/build is committed or built in CI
+  tasks:
+    - name: Pull the latest code (fast-forward only, so local edits are never overwritten)
+      ansible.builtin.command: git pull --ff-only
+      args:
+        chdir: "{{ app_path }}"
+      become: true
+      become_user: "{{ app_user }}"
+      register: pulled
+      changed_when: "'Already up to date' not in pulled.stdout"
+
+    - name: Install PHP packages
+      ansible.builtin.command: composer install --no-dev --optimize-autoloader --no-interaction
+      args:
+        chdir: "{{ app_path }}"
+      become: true
+      become_user: "{{ app_user }}"
+
+    - name: Build the assets
+      ansible.builtin.shell: npm ci && npm run build
+      args:
+        chdir: "{{ app_path }}"
+      become: true
+      become_user: "{{ app_user }}"
+      when: build_assets | bool
+
+    - name: Run the database migrations
+      ansible.builtin.command: "{{ php_bin }} artisan migrate --force --no-interaction"
+      args:
+        chdir: "{{ app_path }}"
+      become: true
+      become_user: "{{ app_user }}"
+
+    - name: Rebuild the caches
+      ansible.builtin.command: "{{ php_bin }} artisan {{ item }} --no-interaction"
+      args:
+        chdir: "{{ app_path }}"
+      become: true
+      become_user: "{{ app_user }}"
+      loop: [config:cache, route:cache, view:cache, event:cache]
+
+    - name: Restart the queue workers
+      ansible.builtin.command: "{{ php_bin }} artisan queue:restart --no-interaction"
+      args:
+        chdir: "{{ app_path }}"
+      become: true
+      become_user: "{{ app_user }}"

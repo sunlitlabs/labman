@@ -12,7 +12,7 @@ class Service extends Model
 {
     protected $fillable = [
         'name', 'domain', 'server_id', 'address', 'port', 'scheme', 'path', 'group',
-        'expect', 'verify_tls', 'public_check', 'websockets', 'notes', 'npm_host_id',
+        'expect', 'verify_tls', 'public_check', 'websockets', 'notes', 'npm_host_id', 'update_project', 'update_template',
         'health_path', 'monitor', 'check_tcp', 'icon', 'public_domain', 'npm_public_host_id', 'extra_domains',
     ];
 
@@ -44,6 +44,12 @@ class Service extends Model
     }
 
     /** The host the backend check connects to: the linked server's address, else our own. */
+    /** Can this service be updated through a Semaphore workbook? */
+    public function hasUpdate(): bool
+    {
+        return $this->update_project > 0 && $this->update_template > 0;
+    }
+
     public function backendAddress(): ?string
     {
         $address = $this->server?->address ?: $this->address;
