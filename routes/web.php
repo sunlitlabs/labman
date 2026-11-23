@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\IconController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\LinkController;
 use App\Http\Controllers\NpmController;
 use App\Http\Controllers\SemaphoreController;
 use App\Http\Controllers\ServerController;
@@ -54,6 +55,7 @@ Route::middleware('admin')->group(function () {
     Route::post('/services/{service}/diagnose', [ServiceController::class, 'applyDiagnosis'])->name('services.diagnose.apply');
     Route::resource('services', ServiceController::class)->except(['index', 'show']);
     Route::resource('servers', ServerController::class)->except(['index', 'show']);
+    Route::resource('links', LinkController::class)->except(['show']);
     Route::resource('users', UserController::class)->except(['index', 'show', 'destroy']);
     Route::post('/users/{user}/approve', [UserController::class, 'approve'])->name('users.approve');
 

@@ -41,6 +41,7 @@
         @can('admin')
             <a class="btn" href="{{ route('services.create') }}">Add service</a>
             <a class="btn" href="{{ route('servers.create') }}">Add server</a>
+            <a class="btn" href="{{ route('links.create') }}">Add link</a>
         @endcan
     </div>
 
@@ -115,6 +116,24 @@
             </section>
         @endforeach
     @endif
+
+    @foreach ($linkGroups as $group => $items)
+        <section class="group">
+            <h2>{{ $group !== '' ? 'Links · '.$group : 'Links' }}</h2>
+            <div class="tiles">
+                @foreach ($items as $link)
+                    <article class="tile clickable" data-href="{{ $link->url }}" tabindex="0" role="link" aria-label="Open {{ $link->name }}"
+                             data-filter="{{ strtolower(implode(' ', [$link->name, $link->url, $link->group, $link->notes])) }}">
+                        @include('partials.icon', ['model' => $link])
+                        <div class="tile-body">
+                            <span class="tile-name">{{ $link->name }}</span>
+                            <small class="tile-sub">{{ $link->notes ?: $link->hostLabel() }}</small>
+                        </div>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+    @endforeach
 
     <p id="no-match" class="card empty" hidden>Nothing matches your search.</p>
 @endsection

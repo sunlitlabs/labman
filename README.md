@@ -200,6 +200,8 @@ Limits: one inventory file; LabMan creates groups for LabMan groups (named like 
 
 **Updating a service.** On a service's edit page, under **Update**, pick the workbook that updates it. An **Update** link then appears on the service list. It opens that workbook's run form already aimed at the service's server (and noted "Update <name>"); you review the run and confirm it like any other, then follow the output live. LabMan does not pull code itself: the workbook does, which keeps credentials, privileges and the exact steps in Semaphore. [`docs/laravel-update.playbook.yml`](docs/laravel-update.playbook.yml) is an example playbook for a Laravel app that runs from a git checkout: `git pull --ff-only`, `composer install --no-dev`, `npm ci && npm run build`, `artisan migrate --force`, the cache commands and `queue:restart`. Copy it into the repository Semaphore uses, adjust the variables, and add a template for it. A service that is not linked to a server opens the form without a target, so you choose where it runs.
 
+**Links.** For pages that are not services or servers (a network controller, a cloud dashboard), use **Add link** on the dashboard or **Admin > Links**. A link has a name, an http(s) address, an optional group, notes and icon; it appears as a tile on the dashboard, opens in a new tab and is never health-checked.
+
 **Host list.** Under **Admin > Semaphore** choose the Semaphore inventory that holds your machines (a static one, kept inside Semaphore; an inventory that points at a git file is handled by the Inventory page above). Then:
 
 - The Servers page shows, per server, the host name Semaphore knows it by, or "Not in Semaphore", and the run form flags servers Semaphore does not have.

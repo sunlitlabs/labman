@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Link;
 use App\Models\Server;
 use App\Models\Service;
 use App\Monitoring\StatusView;
@@ -30,7 +31,8 @@ class HomeController extends Controller
                     'services' => StatusView::summary($services),
                     'servers' => StatusView::summary($servers),
                 ],
-                'empty' => $services->isEmpty() && $servers->isEmpty(),
+                'linkGroups' => Link::query()->orderBy('group')->orderBy('name')->get()->groupBy(fn (Link $l) => $l->group ?: ''),
+                'empty' => $services->isEmpty() && $servers->isEmpty() && ! Link::query()->exists(),
             ]);
         }
 

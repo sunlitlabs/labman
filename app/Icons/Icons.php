@@ -138,7 +138,7 @@ final class Icons
     // ---------------------------------------------------------------- matching
 
     /** The slug to show for a service or server, or null for none. */
-    public static function slugFor(Service|Server $model): ?string
+    public static function slugFor(Service|Server|\App\Models\Link $model): ?string
     {
         if (! Settings::icons()) {
             return null;
@@ -154,7 +154,7 @@ final class Icons
             return $icon;
         }
 
-        return self::match($model->name, $model instanceof Service ? $model->domain : $model->domain);
+        return self::match($model->name, $model instanceof \App\Models\Link ? null : $model->domain);
     }
 
     /** Best library match for a display name (and optionally a domain), or null. */
