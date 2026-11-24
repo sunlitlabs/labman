@@ -4,6 +4,7 @@ namespace App\Npm;
 
 use App\Domain\ServiceInput;
 use App\Models\Server;
+use App\Models\Mirror;
 use App\Models\Service;
 use App\Models\Zone;
 use App\Support\Domains;
@@ -51,8 +52,15 @@ final class NpmSync
         $servers = Zones::serversIn($this->zone)->get();
         $usedNames = $services->pluck('name')->map(fn ($n) => mb_strtolower($n))->all();
 
+        $mirrored = Mirror::query()->where('zone_id', $this->zone->id)->whereNotNull('npm_host_id')->pluck('service_name', 'npm_host_id');
+
         $items = [];
         foreach ($hosts as $host) {
+            if (isset($mirrored[(int) ($host['id'] ?? 0)])) {
+                $items[] = $this->finish(['key' => 'host:'.(int) $host['id'], 'title' => implode(', ', (array) ($host['domain_names'] ?? [])), 'host_id' => (int) $host['id'], 'action' => 'skip'], ['This is a mirror LabMan manages (of '.$mirrored[(int) $host['id']].'), not a service.']);
+
+                continue;
+            }
             $items[] = $this->importItem($host, $services, $servers, $usedNames);
         }
 
@@ -225,7 +233,7 @@ final class NpmSync
             }
         }
 
-        return $items;
+        return [...$items, ...$this->mirrorItems($hosts, $only, $auto)];
     }
 
     /**
@@ -266,12 +274,17 @@ final class NpmSync
                     $hostId = $data['host_id'];
                 }
 
-                if ($hostId > 0) {
+                if (! empty($data['mirror'])) {
+                    // LabMan's record of the mirror, so a later preview can tell drift and orphans apart.
+                    Mirror::updateOrCreate(['zone_id' => $this->zone->id, 'domain' => $data['mirror']['domain']], [
+                        'service_id' => $data['service_id'], 'service_name' => $data['mirror']['service'], 'npm_host_id' => $hostId ?: null, 'upstream' => $data['mirror']['upstream'],
+                    ]);
+                } elseif ($hostId > 0) {
                     Service::whereKey($data['service_id'])->update([$data['link_field'] => $hostId]);
                 }
 
                 $applied++;
-                $results[] = ['title' => $item['title'], 'outcome' => 'applied', 'message' => ($item['action'] === 'create' ? 'Proxy host created in NPM.' : 'Proxy host updated in NPM.').$note];
+                $results[] = ['title' => $item['title'], 'outcome' => 'applied', 'message' => (! empty($data['mirror']) ? ($item['action'] === 'create' ? 'Mirror created in NPM.' : 'Mirror updated in NPM.') : ($item['action'] === 'create' ? 'Proxy host created in NPM.' : 'Proxy host updated in NPM.')).$note];
             } catch (NpmException $e) {
                 $results[] = ['title' => $item['title'], 'outcome' => 'failed', 'message' => $e->getMessage()];
             }
@@ -331,7 +344,7 @@ final class NpmSync
             return $this->finish($base + [
                 'action' => 'create', 'changes' => $changes,
                 'data' => ['service_id' => $service->id, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload, 'cert_request' => $request],
-            ], [$intro, ...$decision['warnings']]);
+            ], [$intro, ...$decision['warnings'], ...(($o = $this->orderingWarning($service)) ? [$o] : [])]);
         }
 
         $hostId = (int) $host['id'];
@@ -381,8 +394,9 @@ final class NpmSync
         }
 
         // The decision's own notes (a missing certificate, a pin that does not exist), plus what is wrong with the certificate the host has now.
+        $ordering = $this->orderingWarning($service);
         $warnings = in_array($decision['mode'], ['none', 'missing'], true) || ($decision['mode'] === 'use' && (int) $decision['certificate_id'] === $currentCert) ? $decision['warnings'] : [];
-        $warnings = array_values(array_unique([...$warnings, ...$problem]));
+        $warnings = array_values(array_unique([...$warnings, ...$problem, ...($ordering ? [$ordering] : [])]));
         if (count($names) > 1) {
             $warnings[] = 'This proxy host serves several names ('.implode(', ', $names).'); changes apply to all of them.';
         }
@@ -516,6 +530,195 @@ final class NpmSync
         }
 
         return ['rows' => $rows, 'counts' => $counts];
+    }
+
+    /** Lower zones should not initiate connections to higher ones: warn (never block) when a host forwards upward. */
+    private function orderingWarning(Service $service): ?string
+    {
+        $server = $service->server;
+        $serverZone = $server?->zone_id ? Zone::query()->find($server->zone_id) : null;
+
+        return $serverZone !== null && $serverZone->level > $this->zone->level
+            ? "The {$this->zone->name} proxy (level {$this->zone->level}) forwards to {$server->name}, which is in the more trusted {$serverZone->name} zone (level {$serverZone->level}). Lower zones should not initiate connections to higher ones."
+            : null;
+    }
+
+    /** @var array<int, array<int, array<string, mixed>>|null> the proxy hosts of other zones, read at most once each */
+    private array $otherHosts = [];
+
+    /** @var array<int, list<array<string, mixed>>|null> */
+    private array $otherCerts = [];
+
+    /** Another zone's proxy hosts and certificates, or null when it is not connected or cannot be read (the plan still works). */
+    private function otherZone(Zone $zone): ?array
+    {
+        if (! array_key_exists($zone->id, $this->otherHosts)) {
+            try {
+                $client = NpmClient::fromStored($zone);
+                $this->otherHosts[$zone->id] = $client->proxyHosts();
+                $this->otherCerts[$zone->id] = $client->certificates();
+            } catch (NpmException) {
+                $this->otherHosts[$zone->id] = null;
+                $this->otherCerts[$zone->id] = null;
+            }
+        }
+
+        return $this->otherHosts[$zone->id];
+    }
+
+    /**
+     * The mirrors this zone's proxy should hold, as plan items: create, update when drifted, in sync, blocked (with
+     * the reason) and orphaned (a mirror LabMan made that nothing asks for any more; it is listed, never deleted).
+     *
+     * @param  Collection<int, array<string, mixed>>  $hosts  this proxy's hosts
+     * @param  list<int>|null  $only
+     * @return list<array<string, mixed>>
+     */
+    private function mirrorItems(Collection $hosts, ?array $only, bool $auto): array
+    {
+        $zones = Zone::query()->get();
+        $wanted = Mirrors::wanted($this->zone, $only, $zones);
+        $records = Mirror::query()->where('zone_id', $this->zone->id)->get()->keyBy('domain');
+        $items = [];
+
+        foreach ($wanted as $domain => $w) {
+            $items[] = $this->mirrorItem($w, $hosts, $records->get($domain), $auto);
+        }
+
+        // Orphans are only reported for a full plan; a run limited to some services must not list unrelated ones.
+        if ($only === null) {
+            foreach (Mirrors::orphans($this->zone, $wanted) as $orphan) {
+                $why = $orphan->service_id && Service::query()->whereKey($orphan->service_id)->exists()
+                    ? 'No mirror rule or publish setting asks for it any more.'
+                    : 'Its service no longer exists or no longer has this name.';
+                $items[] = $this->finish([
+                    'key' => 'mirror-orphan:'.$orphan->id, 'title' => 'Orphaned mirror: '.$orphan->domain.' ('.$orphan->service_name.')',
+                    'action' => 'orphan', 'host_id' => $orphan->npm_host_id,
+                ], [$why.' LabMan never deletes anything in NPM: remove proxy host '.($orphan->npm_host_id ? '#'.$orphan->npm_host_id : 'for '.$orphan->domain).' in NPM yourself, then forget it here.']);
+            }
+        }
+
+        return $items;
+    }
+
+    /** @param array{service: Service, source: Zone, domain: string, upstream: string} $w @return array<string, mixed> */
+    private function mirrorItem(array $w, Collection $hosts, ?Mirror $record, bool $auto): array
+    {
+        /** @var Service $service */
+        $service = $w['service'];
+        $source = $w['source'];
+        $domain = $w['domain'];
+        $base = ['key' => "mirror:{$service->id}:{$domain}", 'title' => "{$domain} ← {$source->name} zone (mirror of {$service->name})"];
+        $blocked = fn (string $why) => $this->finish($base + ['action' => 'skip'], [$why]);
+
+        $target = $source->proxy_address;
+        if ($target === null || $target === '') {
+            return $blocked("Set the proxy address of the {$source->name} zone (what other proxies forward to). Without it there is nothing to forward the mirror to.");
+        }
+        if (mb_strtolower($target) === $domain) {
+            return $blocked("The {$source->name} zone's proxy address is the mirrored name itself, so the mirror would loop. Use an IP address or a name that resolves straight to that proxy.");
+        }
+
+        // Another service of this zone already has this name: a mirror would fight it.
+        $own = Zones::servicesIn($this->zone)->where(fn ($q) => $q->where('domain', $domain)->orWhere('public_domain', $domain))->first();
+        if ($own !== null) {
+            return $blocked("{$own->name} in the {$this->zone->name} zone already has this name, so it is not mirrored. Choose which zone owns it.");
+        }
+
+        // What to forward to: automatic looks at how the source zone's proxy serves the name.
+        $sourceHosts = $this->otherZone($source);
+        $sourceHost = $sourceHosts === null ? null : (collect($sourceHosts)->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true)));
+        $sourceCert = $sourceHost !== null && (int) ($sourceHost['certificate_id'] ?? 0) > 0 ? collect($this->otherCerts[$source->id] ?? [])->firstWhere('id', (int) $sourceHost['certificate_id']) : null;
+        $choice = Mirrors::chooseUpstream($w['upstream'], $source, $sourceHost, $sourceCert);
+        $upstream = $choice['upstream'];
+        $port = $upstream === 'http' ? 80 : 443;
+        $scheme = $upstream === 'http' ? 'http' : 'https';
+
+        $desired = [
+            'forward_scheme' => $scheme, 'forward_host' => $target, 'forward_port' => $port,
+            'allow_websocket_upgrade' => (bool) $service->websockets,
+            'advanced_config' => Mirrors::advancedConfig($upstream, $source->name),
+        ];
+
+        // The mirror's own certificate on this proxy: browser-trusted, never the source's (they are different proxies).
+        $decision = CertificateChooser::choose($domain, $this->zone->certificatePolicy(), $this->certificates(), null, 0, $auto, $this->zone->domainNames());
+        $warnings = [];
+        if ($this->zone->level < $source->level) {
+            $warnings[] = "The {$this->zone->name} proxy (level {$this->zone->level}) reaches into the more trusted {$source->name} zone (level {$source->level}). Lower zones should not initiate connections to higher ones.";
+        }
+        if (! filter_var($target, FILTER_VALIDATE_IP) && ($owner = Zones::owners($target)) !== []) {
+            $warnings[] = "The {$source->name} proxy address '{$target}' is a name under a zone domain; if it resolves to this proxy the mirror loops. An IP address is safest.";
+        }
+        $note = "Forwards to {$target}:{$port} over {$scheme} ({$choice['why']}), keeping the original Host header".($scheme === 'https' ? ' and SNI' : '').'.';
+
+        $host = $hosts->first(fn ($h) => $record?->npm_host_id !== null && (int) $h['id'] === (int) $record->npm_host_id)
+            ?? $hosts->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true));
+        $data = ['mirror' => ['domain' => $domain, 'service' => $service->name, 'upstream' => $upstream, 'source_zone_id' => $source->id], 'service_id' => $service->id, 'scope' => 'mirror'];
+
+        if ($host === null) {
+            if ($decision['mode'] === 'missing') {
+                return $blocked("No browser-trusted certificate is available for {$domain} on the {$this->zone->name} proxy, so the mirror is not created (it would show a certificate warning). ".implode(' ', $decision['warnings']).' Add a wildcard or let the zone request one (zone certificate settings).');
+            }
+            $cert = $decision['mode'] === 'use' ? (int) $decision['certificate_id'] : 0;
+            $request = $decision['mode'] === 'request' ? $this->requestData($decision, true) : null;
+            $payload = $desired + [
+                'domain_names' => [$domain], 'certificate_id' => $cert, 'ssl_forced' => $cert > 0, 'http2_support' => $cert > 0, 'hsts_enabled' => false, 'hsts_subdomains' => false,
+                'block_exploits' => true, 'caching_enabled' => false, 'access_list_id' => 0, 'enabled' => true, 'meta' => new \stdClass, 'locations' => [],
+            ];
+            $changes = [['field' => 'mirror', 'from' => null, 'to' => "{$domain} → {$scheme}://{$target}:{$port}"]];
+            if ($cert > 0 || $request) {
+                $changes[] = ['field' => 'certificate', 'from' => null, 'to' => $decision['why']];
+            }
+
+            return $this->finish($base + ['action' => 'create', 'changes' => $changes, 'data' => $data + ['payload' => $payload, 'cert_request' => $request]], [$note, ...$warnings, ...$decision['warnings']]);
+        }
+
+        // An existing host: drifted when anything LabMan owns about the mirror differs.
+        $payload = [];
+        $changes = [];
+        $current = [
+            'forward_scheme' => $host['forward_scheme'] ?? null, 'forward_host' => $host['forward_host'] ?? null,
+            'forward_port' => (int) ($host['forward_port'] ?? 0), 'allow_websocket_upgrade' => (bool) ($host['allow_websocket_upgrade'] ?? false),
+            'advanced_config' => (string) ($host['advanced_config'] ?? ''),
+        ];
+        foreach ($desired as $field => $value) {
+            $differs = $field === 'forward_host' ? strcasecmp((string) $current[$field], (string) $value) !== 0 : $current[$field] !== $value;
+            if ($differs) {
+                $payload[$field] = $value;
+                $changes[] = ['field' => $field === 'advanced_config' ? 'Host header and SNI settings' : $field, 'from' => is_bool($current[$field]) ? ($current[$field] ? 'on' : 'off') : ($field === 'advanced_config' ? ($current[$field] === '' ? 'none' : 'different') : $current[$field]), 'to' => is_bool($value) ? ($value ? 'on' : 'off') : ($field === 'advanced_config' ? 'managed by LabMan' : $value)];
+            }
+        }
+
+        $currentCert = (int) ($host['certificate_id'] ?? 0);
+        $known = $currentCert > 0 ? collect($this->certificates() ?? [])->firstWhere('id', $currentCert) : null;
+        $broken = $known !== null && (! Certificates::coversHost($known, $domain) || Certificates::expired($known) || $this->untrusted($known));
+        $request = null;
+        if ($decision['mode'] === 'use' && (int) $decision['certificate_id'] !== $currentCert && ($currentCert === 0 || $broken) && ! ($auto && $currentCert > 0)) {
+            $payload['certificate_id'] = (int) $decision['certificate_id'];
+            if ($currentCert === 0) {
+                $payload += ['ssl_forced' => true, 'http2_support' => true];
+            }
+            $changes[] = ['field' => 'certificate', 'from' => $currentCert > 0 ? "#{$currentCert}" : 'none', 'to' => $decision['why']];
+        } elseif ($decision['mode'] === 'request' && ($currentCert === 0 || $broken)) {
+            $request = $this->requestData($decision, $currentCert === 0);
+            $changes[] = ['field' => 'certificate', 'from' => $currentCert > 0 ? "#{$currentCert}" : 'none', 'to' => $decision['why']];
+        }
+        if ($known !== null) {
+            $warnings = [...$warnings, ...$this->certificateProblems($known, $domain)];
+        } elseif ($currentCert === 0 && $decision['mode'] === 'missing') {
+            $warnings[] = "This mirror has no certificate and none is available for {$domain}: browsers will show a certificate warning. ".implode(' ', $decision['warnings']);
+        }
+        if ($record === null || (int) $record->npm_host_id !== (int) $host['id']) {
+            $warnings[] = 'An existing proxy host already serves this name. LabMan takes it over as the mirror of '.$source->name.' and changes it to forward there.';
+            $changes[] = ['field' => 'tracking', 'from' => 'not tracked by LabMan', 'to' => 'tracked as the mirror of '.$service->name];
+        }
+
+        $hostId = (int) $host['id'];
+
+        return $this->finish($base + [
+            'action' => $changes ? 'update' : 'unchanged', 'changes' => $changes,
+            'data' => $data + ['host_id' => $hostId, 'payload' => $payload, 'modified_on' => $host['modified_on'] ?? null, 'cert_request' => $request],
+        ], [$note, ...array_values(array_unique($warnings))]);
     }
 
     /** @var list<array{id: int, name: string, domains: list<string>, expires_on: ?string, provider: string}>|null|false false = not read yet */

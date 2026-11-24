@@ -73,6 +73,31 @@
                 </div>
             </section>
 
+            @php($others = \App\Support\Zones::all()->reject(fn ($z) => $z->id === $zone->id))
+            @if ($others->isNotEmpty())
+                @php($sources = \App\Npm\Mirrors::sourcesOf($zone))
+                <section class="formcard">
+                    <h2>Mirrors</h2>
+                    <p class="sub">Let this zone's proxy also answer for the hosts of another zone, forwarding to that zone's proxy by the same name. Off by default. The other zone needs a proxy address (what proxies forward to), and this zone needs a browser-trusted certificate for the name (a wildcard or a requested one). A mirror from a higher zone into a lower one is normal; a lower zone reaching into a higher one is allowed but warned about.</p>
+                    @foreach ($others as $o)
+                        <div class="grid2">
+                            <label class="check">
+                                <input type="checkbox" name="mirror_from[]" value="{{ $o->id }}" @checked(old('mirror_from') ? in_array((string) $o->id, array_map('strval', old('mirror_from')), true) : isset($sources[$o->id]))>
+                                <span>Mirror the hosts of <strong>{{ $o->name }}</strong> <span class="hint">level {{ $o->level }}{{ $o->proxy_address ? ', proxy '.$o->proxy_address : ', no proxy address yet' }}</span></span>
+                            </label>
+                            <div class="field">
+                                <label class="sr-only" for="mirror_upstream_{{ $o->id }}">Hop to {{ $o->name }}</label>
+                                <select id="mirror_upstream_{{ $o->id }}" name="mirror_upstream[{{ $o->id }}]">
+                                    @foreach (\App\Npm\Mirrors::UPSTREAM_LABELS as $value => $label)
+                                        <option value="{{ $value }}" @selected(($sources[$o->id] ?? 'auto') === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                    @endforeach
+                </section>
+            @endif
+
             @php($policy = $zone->certificatePolicy())
             <section class="formcard">
                 <h2>Certificates</h2>

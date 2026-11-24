@@ -48,6 +48,15 @@ final class ServiceInput
             }
             unset($in['cert_existing']);
         }
+        // The form posts the zones to also publish in (checkboxes) and a hop setting for each; a marker lets "none ticked" clear it.
+        if (array_key_exists('publish_form', $in)) {
+            $refs = [];
+            foreach ((array) ($in['publish_in'] ?? []) as $id) {
+                $refs[] = ['zone_id' => (int) $id, 'upstream' => ((array) ($in['publish_upstream'] ?? []))[$id] ?? 'auto'];
+            }
+            $in['publish_zones'] = $refs;
+            unset($in['publish_form'], $in['publish_in'], $in['publish_upstream']);
+        }
         if (array_key_exists('cert_mode', $in) && $in['cert_mode'] === 'auto') {
             $in['cert_mode'] = null;
         }
@@ -108,6 +117,9 @@ final class ServiceInput
             // Only to override the zone of the service's server; empty means "same as the server".
             'zone_id' => ['nullable', 'integer', 'exists:zones,id'],
             // The service's own certificate choice; empty follows the zone's policy.
+            'publish_zones' => ['nullable', 'array', 'max:20'],
+            'publish_zones.*.zone_id' => ['required', 'integer', 'exists:zones,id'],
+            'publish_zones.*.upstream' => ['required', Rule::in(\App\Npm\Mirrors::UPSTREAMS)],
             'cert_mode' => ['nullable', 'string', 'regex:/^(none|letsencrypt_http|letsencrypt_dns|existing:[1-9][0-9]*)$/'],
         ];
     }
@@ -132,6 +144,9 @@ final class ServiceInput
         $validated['health_path'] = filled($validated['health_path'] ?? null) ? $validated['health_path'] : null;
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
         $validated['public_domain'] = filled($validated['public_domain'] ?? null) ? strtolower($validated['public_domain']) : null;
+        if (array_key_exists('publish_zones', $validated)) {
+            $validated['publish_zones'] = \App\Npm\Mirrors::refs($validated['publish_zones']) ?: null;
+        }
         if (array_key_exists('cert_mode', $validated)) {
             $validated['cert_mode'] = filled($validated['cert_mode']) ? $validated['cert_mode'] : null;
         }
@@ -195,6 +210,7 @@ final class ServiceInput
             'update_template' => $service->update_template,
             'zone_id' => $service->zone_id,
             'cert_mode' => $service->cert_mode,
+            'publish_zones' => $service->publish_zones,
         ];
     }
 }

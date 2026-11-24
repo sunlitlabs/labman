@@ -7,6 +7,7 @@ use App\Models\Service;
 use App\Models\Zone;
 use App\Npm\CertificatePolicy;
 use App\Npm\Connection;
+use App\Npm\Mirrors;
 use App\Npm\NpmClient;
 use App\Rules\Check;
 use App\Support\Domains;
@@ -109,7 +110,16 @@ class ZoneController extends Controller
             'cert_origin' => ['nullable', 'string', 'max:200'],
             'cert_email' => ['nullable', 'string', 'max:254'],
             'cert_dns_template' => ['nullable', 'integer', 'min:1'],
+            'mirror_from' => ['nullable', 'array'], 'mirror_from.*' => ['integer', 'exists:zones,id'],
+            'mirror_upstream' => ['nullable', 'array'], 'mirror_upstream.*' => ['nullable', Rule::in(Mirrors::UPSTREAMS)],
         ]);
+
+        $sources = [];
+        foreach ((array) ($v['mirror_from'] ?? []) as $id) {
+            if ($zone === null || (int) $id !== $zone->id) {
+                $sources[] = ['zone_id' => (int) $id, 'upstream' => $v['mirror_upstream'][$id] ?? 'auto'];
+            }
+        }
 
         [$policy, $problems] = CertificatePolicy::validate([
             'strategy' => $v['cert_strategy'] ?? 'existing',
@@ -140,6 +150,7 @@ class ZoneController extends Controller
             'proxy_address' => filled($v['proxy_address'] ?? null) ? trim($v['proxy_address']) : null,
             'notes' => $v['notes'] ?? null,
             'certificate_policy' => $policy ?: null,
+            'mirror_sources' => Mirrors::refs($sources) ?: null,
         ];
 
         // The default zone's domains are the two lists on the Nginx Proxy Manager page; only other zones keep their own.

@@ -42,6 +42,7 @@
             </div>
             <div class="actions">
                 <a class="btn" href="{{ route('npm.all', ['mode' => 'push']) }}" data-progress='["Connecting to each proxy","Reading their proxy hosts","Working out what would change in each"]'>Preview push to all proxies</a>
+                <a class="btn" href="{{ route('npm.mirrors') }}">Mirrors</a>
                 <a class="btn" href="{{ route('npm.all', ['mode' => 'import']) }}" data-progress='["Connecting to each proxy","Reading their proxy hosts","Working out what would change in LabMan"]'>Preview import from all proxies</a>
             </div>
         </div>

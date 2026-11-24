@@ -8,6 +8,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\IconController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LinkController;
+use App\Http\Controllers\MirrorController;
 use App\Http\Controllers\NpmController;
 use App\Http\Controllers\SemaphoreController;
 use App\Http\Controllers\ServerController;
@@ -97,6 +98,8 @@ Route::middleware('admin')->group(function () {
     Route::post('/npm/import', [NpmController::class, 'importApply'])->name('npm.import.apply');
     Route::get('/npm/push', [NpmController::class, 'pushPreview'])->name('npm.push');
     Route::post('/npm/push', [NpmController::class, 'pushApply'])->name('npm.push.apply');
+    Route::get('/npm/mirrors', [MirrorController::class, 'index'])->name('npm.mirrors');
+    Route::delete('/npm/mirrors/{mirror}', [MirrorController::class, 'forget'])->name('npm.mirrors.forget');
     Route::get('/npm/all', [NpmController::class, 'allPreview'])->name('npm.all');
     Route::post('/npm/all', [NpmController::class, 'allApply'])->name('npm.all.apply');
 

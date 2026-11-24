@@ -13,8 +13,8 @@
                 @else
                     <strong>{{ $item['title'] }}</strong>
                 @endif
-                <span class="pill pill-{{ ['create' => 'degraded', 'update' => 'degraded', 'unchanged' => 'up', 'skip' => 'unknown'][$item['action']] }}">
-                    {{ ['create' => $isImport ? 'new service' : 'new proxy host', 'update' => 'update', 'unchanged' => 'in sync', 'skip' => 'skipped'][$item['action']] }}
+                <span class="pill pill-{{ ['create' => 'degraded', 'update' => 'degraded', 'unchanged' => 'up', 'skip' => 'unknown', 'orphan' => 'down'][$item['action']] }}">
+                    {{ ['create' => $isImport ? 'new service' : 'new proxy host', 'update' => 'update', 'unchanged' => 'in sync', 'skip' => 'skipped', 'orphan' => 'orphaned'][$item['action']] }}
                 </span>
             </div>
 

@@ -18,7 +18,7 @@ use Throwable;
 final class NpmAuto
 {
     /** Fields of a service that end up in its proxy host. */
-    public const SERVICE_FIELDS = ['domain', 'public_domain', 'scheme', 'port', 'address', 'server_id', 'websockets', 'zone_id'];
+    public const SERVICE_FIELDS = ['domain', 'public_domain', 'scheme', 'port', 'address', 'server_id', 'websockets', 'zone_id', 'publish_zones'];
 
     /** What is waiting to be sent. Kept on the application instance so it never leaks between requests (or tests). */
     private static function pending(): \ArrayObject
@@ -116,6 +116,10 @@ final class NpmAuto
             $zone = \App\Support\Zones::of($service);
             if ($zone !== null) {
                 $byZone[$zone->id][] = $service->id;
+            }
+            // and to the proxies that mirror it, if any
+            foreach (Mirrors::targetsFor($service) as $target) {
+                $byZone[$target->id][] = $service->id;
             }
         }
         $defaultId = \App\Support\Zones::defaultId();

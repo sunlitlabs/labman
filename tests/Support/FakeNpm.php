@@ -39,6 +39,8 @@ final class FakeNpm
     /** @var array<string, self> instances by address, so one Http fake can serve several proxies */
     private static array $all = [];
 
+    private static ?object $registeredOn = null;
+
     /** Installing at the default address starts a fresh set; other addresses add a second proxy. */
     public static function install(string $url = self::URL): self
     {
@@ -50,15 +52,20 @@ final class FakeNpm
         }
         self::$all[$url] = $npm;
 
-        Http::fake(function (Request $request) {
-            foreach (self::$all as $url => $instance) {
-                if (str_starts_with($request->url(), $url)) {
-                    return $instance->handle($request);
+        // One fake per test is enough (a second one would also run on every request): it dispatches by address.
+        $factory = Http::getFacadeRoot();
+        if (self::$registeredOn !== $factory) {
+            self::$registeredOn = $factory;
+            Http::fake(function (Request $request) {
+                foreach (self::$all as $url => $instance) {
+                    if (str_starts_with($request->url(), $url)) {
+                        return $instance->handle($request);
+                    }
                 }
-            }
 
-            return Http::response('not npm', 404);
-        });
+                return Http::response('not npm', 404);
+            });
+        }
 
         return $npm;
     }

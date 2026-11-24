@@ -139,6 +139,32 @@
                 @endif
             </section>
 
+            @if (\App\Support\Zones::multiple())
+                @php($ownZone = $service->exists ? \App\Support\Zones::of($service) : null)
+                @php($published = array_column(\App\Npm\Mirrors::refs($service->publish_zones), 'upstream', 'zone_id'))
+                <section class="formcard">
+                    <h2>Also publish in</h2>
+                    <p class="sub">Other zones whose proxy should answer for this service's names too (a mirror that forwards to {{ $ownZone ? 'the '.$ownZone->name.' zone' : 'its own zone' }}'s proxy). Off unless ticked; a zone can also mirror a whole zone on its own page. Nothing changes in NPM until you apply a previewed push.</p>
+                    <input type="hidden" name="publish_form" value="1">
+                    @foreach (\App\Support\Zones::all()->reject(fn ($z) => $ownZone && $z->id === $ownZone->id) as $z)
+                        <div class="grid2">
+                            <label class="check">
+                                <input type="checkbox" name="publish_in[]" value="{{ $z->id }}" @checked(old('publish_in') ? in_array((string) $z->id, array_map('strval', old('publish_in')), true) : isset($published[$z->id]))>
+                                <span>{{ $z->name }} <span class="hint">level {{ $z->level }}</span></span>
+                            </label>
+                            <div class="field">
+                                <label class="sr-only" for="publish_upstream_{{ $z->id }}">Hop for {{ $z->name }}</label>
+                                <select id="publish_upstream_{{ $z->id }}" name="publish_upstream[{{ $z->id }}]">
+                                    @foreach (\App\Npm\Mirrors::UPSTREAM_LABELS as $value => $label)
+                                        <option value="{{ $value }}" @selected(($published[$z->id] ?? 'auto') === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                    @endforeach
+                </section>
+            @endif
+
             <details class="formcard" @if (old('notes', $service->notes) || old('icon', $service->icon) || old('cert_mode', $service->cert_mode) || ! old('verify_tls', $service->verify_tls) || old('websockets', $service->websockets)) open @endif>
                 <summary>More: notes, icon, certificate, TLS, websockets</summary>
                 @php($certMode = (string) old('cert_mode', $service->cert_mode))
