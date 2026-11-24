@@ -16,6 +16,7 @@ use App\Npm\NpmSync;
 use App\Support\Settings;
 use App\Support\Zones;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\FakeNpm;
 use Tests\TestCase;
 
@@ -90,7 +91,7 @@ class CertificatesTest extends TestCase
 
     // ----------------------------------------------------------------------- name matching
 
-    #[PHPUnitFrameworkAttributesDataProvider('coverage')]
+    #[DataProvider('coverage')]
     public function test_a_certificate_name_covers_a_host_by_the_single_label_rule(string $pattern, string $host, bool $covers): void
     {
         $this->assertSame($covers, Certificates::covers($pattern, $host));
