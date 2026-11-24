@@ -202,7 +202,13 @@ Limits: one inventory file; LabMan creates groups for LabMan groups (named like 
 
 **Updating a service.** On a service's edit page, under **Update**, pick the workbook that updates it. An **Update** link then appears on the service list. It opens that workbook's run form already aimed at the service's server (and noted "Update <name>"); you review the run and confirm it like any other, then follow the output live. LabMan does not pull code itself: the workbook does, which keeps credentials, privileges and the exact steps in Semaphore. [`docs/laravel-update.playbook.yml`](docs/laravel-update.playbook.yml) is an example playbook for a Laravel app that runs from a git checkout: `git pull --ff-only`, `composer install --no-dev`, `npm ci && npm run build`, `artisan migrate --force`, the cache commands and `queue:restart`. Copy it into the repository Semaphore uses, adjust the variables, and add a template for it. A service that is not linked to a server opens the form without a target, so you choose where it runs.
 
+## Links
+
 **Links.** For pages that are not services or servers (a network controller, a cloud dashboard), use **Add link** on the dashboard or **Admin > Links**. A link has a name, an http(s) address, an optional group, notes and icon; it appears as a tile on the dashboard, opens in a new tab and is never health-checked.
+
+## Zones
+
+**How zones work.** Servers belong to zones, and a service follows its server. Each zone can have its own proxy (an Nginx Proxy Manager), its own domains (for example `lab.example.com` inside, `example.dev` public) and its own certificate policy. A name belongs to the zone with the longest matching domain, and an exact tie is settled by picking an owner. To let people in one zone reach a host another zone publishes, by the same name, the first zone's proxy mirrors it. A lab with one zone sees no change anywhere. The quickest way in is the setup wizard (**Admin > Zones**). Everything that changes a proxy is previewed first and applied only for the items you approve; nothing is ever deleted in NPM; secrets are never shown, exported or returned over MCP; and LabMan lists DNS records but does not write them. The paragraphs below cover each part.
 
 **Zones.** A zone is a trust level that servers belong to (for example management, internal, LAN, external); higher levels are more trusted, and LabMan only ever uses the level to warn. Every install has one **Default** zone holding everything, and with one zone nothing else in LabMan changes. Add more under **Admin > Zones**: each zone has a level, optional network blocks (to suggest a zone for a new server from its address), optional domains, and the address other zones forward to. Once there are two zones, the server form gets a Zone field and the service form an optional override (a service normally follows its server). Zones are in the YAML export and import (`zones:`, and `zone: <name>` on a server or service); a file without zones still imports. A name belongs to the zone with the longest matching domain (so `*.a.example.dev` beats `*.example.dev`).
 
@@ -320,12 +326,13 @@ docker compose exec labman php artisan labman:monitor --once
 
 ## Roadmap
 
-Done: Nginx Proxy Manager import and push, an MCP server (v0.2); inventory sync and Semaphore runs (v0.3).
+Done: Nginx Proxy Manager import and push, an MCP server (v0.2); inventory sync and Semaphore runs (v0.3); dashboard links, per-service updates, and zones with per-zone proxies, certificate matching, mirrors, a DNS plan, a setup wizard and MCP tools.
 
 1. **Inventory**: several inventory files, group-level variables, and creating the inventory file from scratch.
-2. **More NPM coverage**: redirection hosts, streams and 404 hosts, certificate/SSL awareness in previews, and optional deletion with a separate explicit confirmation.
+2. **More NPM coverage**: redirection hosts, streams and 404 hosts, and optional deletion with a separate explicit confirmation.
 3. **MCP**: finer-grained token scopes (per tool group), and resources/prompts for common workflows.
-4. Later ideas: websocket-aware checks (the `websockets` flag is informational today), notifications on state changes, history graphs.
+4. **DNS**: push the DNS plan to a provider (a `DnsProvider` interface marks where it plugs in), and an inside record for a lower zone to reach a higher zone's hosts directly.
+5. Later ideas: websocket-aware checks (the `websockets` flag is informational today), notifications on state changes, history graphs.
 
 ## License
 
