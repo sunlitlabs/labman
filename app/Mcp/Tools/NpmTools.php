@@ -2,18 +2,25 @@
 
 namespace App\Mcp\Tools;
 
+use App\Mcp\McpContext;
 use App\Mcp\Tool;
 use App\Mcp\ToolException;
+use App\Models\ProxyLog;
 use App\Npm\Connection;
 use App\Npm\NpmClient;
 use App\Npm\NpmException;
 use App\Npm\NpmSync;
+use App\Npm\PlanText;
+use App\Support\ZoneStatus;
 use Closure;
 
 /**
  * Nginx Proxy Manager tools. Import/push are always two steps: a *_preview that lists
  * every change with a fingerprint, then a *_apply naming the items (key + fingerprint)
  * the user approved. The saved NPM password is never returned by any tool.
+ *
+ * Each zone has its own proxy. Every tool here takes an optional `zone`; without one it acts on the default zone
+ * and, when there are several zones, says so in a `hint`. (npm_preview_all / npm_apply_all cover every proxy.)
  */
 final class NpmTools
 {
@@ -31,70 +38,117 @@ final class NpmTools
     /** @return list<Tool> */
     public static function all(): array
     {
-        return [
-            new Tool('npm_get_connection', 'Show the NPM connection', 'Whether LabMan is connected to Nginx Proxy Manager, and to which address and account. The password is never shown.',
-                [], [], 'admin', true, false, fn () => ['connected' => Connection::exists(), 'connection' => Connection::summary()]),
+        $zone = ZoneTools::zoneProperty();
 
-            new Tool('npm_set_connection', 'Connect to Nginx Proxy Manager', 'Test and save the NPM address and login (stored encrypted). Note the password passes through this conversation; entering it in the LabMan UI avoids that. Use a dedicated NPM user without two-factor authentication.',
-                [
+        return [
+            new Tool('npm_get_connection', 'Show the NPM connection', 'Whether LabMan is connected to Nginx Proxy Manager for a zone (the default zone when none is given), and to which address and account. The password is never shown.',
+                $zone, [], 'admin', true, false, function (array $a) {
+                    $z = ZoneTools::zone($a);
+
+                    return ['zone' => $z->name, 'connected' => Connection::exists($z), 'connection' => Connection::summary($z)] + ZoneTools::hint($a, $z);
+                }),
+
+            new Tool('npm_set_connection', 'Connect to Nginx Proxy Manager', 'Test and save the NPM address and login for a zone (stored encrypted; each zone has its own proxy). Note the password passes through this conversation; entering it in the LabMan UI avoids that. Use a dedicated NPM user without two-factor authentication.',
+                $zone + [
                     'url' => Tool::str('NPM admin address, e.g. http://192.0.2.5:81 (no path).'),
                     'email' => Tool::str('NPM account e-mail.'),
                     'password' => Tool::str('NPM account password.'),
                     'verify_tls' => Tool::bool('Verify the TLS certificate when the address is https (default true).'),
                 ], ['url', 'email', 'password'], 'admin', false, false, function (array $a) {
-                    return self::npm(function () use ($a) {
+                    $z = ZoneTools::zone($a);
+
+                    return self::npm(function () use ($a, $z) {
                         $url = Connection::cleanUrl((string) $a['url']);
                         $verify = (bool) ($a['verify_tls'] ?? true);
                         $version = (new NpmClient(['url' => $url, 'email' => (string) $a['email'], 'password' => (string) $a['password'], 'verify_tls' => $verify]))->test();
-                        Connection::save($url, (string) $a['email'], (string) $a['password'], $verify);
+                        Connection::save($url, (string) $a['email'], (string) $a['password'], $verify, $z);
+                        ZoneStatus::forget($z);
 
-                        return ['connected' => true, 'npm_version' => $version, 'connection' => Connection::summary()];
+                        return ['zone' => $z->name, 'connected' => true, 'npm_version' => $version, 'connection' => Connection::summary($z), 'next' => 'npm_push_preview (or npm_import_preview) with this zone shows what would change.'] + ZoneTools::hint($a, $z);
                     });
                 }),
 
-            new Tool('npm_test_connection', 'Test the NPM connection', 'Log in to NPM with the saved credentials and report its version.',
-                [], [], 'admin', true, false, fn () => self::npm(fn () => ['ok' => true, 'npm_version' => NpmClient::fromStored()->test()])),
+            new Tool('npm_test_connection', 'Test the NPM connection', 'Log in to a zone\'s NPM with the saved credentials and report its version.',
+                $zone, [], 'admin', true, false, function (array $a) {
+                    $z = ZoneTools::zone($a);
 
-            new Tool('npm_remove_connection', 'Disconnect from NPM', 'Delete the saved NPM address and login from LabMan. Nothing in NPM is changed.',
-                [], [], 'admin', false, true, function () {
-                    Connection::forget();
-
-                    return ['connected' => false];
+                    return self::npm(fn () => ['zone' => $z->name, 'ok' => true, 'npm_version' => NpmClient::fromStored($z)->test()] + ZoneTools::hint($a, $z));
                 }),
 
-            new Tool('npm_import_preview', 'Preview importing from NPM', 'Read-only. Compare NPM proxy hosts with LabMan services and list every service that would be created or updated (no NPM or LabMan data is changed). Show the result to the user, then call npm_import_apply with what they approve.',
-                [], [], 'admin', true, false, fn () => self::npm(fn () => ['items' => self::present((new NpmSync(NpmClient::fromStored()))->importPlan())])),
+            new Tool('npm_remove_connection', 'Disconnect from NPM', 'Delete the saved NPM address and login of a zone from LabMan. Nothing in NPM is changed.',
+                $zone, [], 'admin', false, true, function (array $a) {
+                    $z = ZoneTools::zone($a);
+                    Connection::forget($z);
+                    ZoneStatus::forget($z);
+
+                    return ['zone' => $z->name, 'connected' => false] + ZoneTools::hint($a, $z);
+                }),
+
+            new Tool('npm_import_preview', 'Preview importing from NPM', 'Read-only. Compare a zone\'s NPM proxy hosts with the zone\'s LabMan services and list every service that would be created or updated (no NPM or LabMan data is changed). Show the result to the user, then call npm_import_apply with what they approve.',
+                $zone, [], 'admin', true, false, function (array $a) {
+                    $z = ZoneTools::zone($a);
+
+                    return self::npm(fn () => ['zone' => $z->name, 'items' => self::present((new NpmSync(NpmClient::fromStored($z), $z))->importPlan(), $z->name, true), 'next' => 'Show the user these items, then npm_import_apply with the ones they approve (key + fingerprint).'] + ZoneTools::hint($a, $z));
+                }),
 
             new Tool('npm_import_apply', 'Apply an NPM import', 'Create/update LabMan services for the previewed items the user approved. Does not write to NPM.',
-                ['items' => self::SELECTION], ['items'], 'admin', false, false,
-                fn (array $a) => self::npm(fn () => (new NpmSync(NpmClient::fromStored()))->applyImport(self::selection($a)))),
+                $zone + ['items' => self::SELECTION], ['items'], 'admin', false, false, function (array $a, McpContext $ctx) {
+                    $z = ZoneTools::zone($a);
 
-            new Tool('npm_push_preview', 'Preview pushing to NPM', 'Read-only. Compare LabMan services that have a domain with NPM proxy hosts and list every proxy host that would be updated or created in NPM. Show the user the exact diff, then call npm_push_apply with what they approve.',
-                [], [], 'admin', true, false, fn () => self::npm(fn () => ['items' => self::present((new NpmSync(NpmClient::fromStored()))->pushPlan())])),
+                    return self::npm(function () use ($a, $z, $ctx) {
+                        $result = (new NpmSync(NpmClient::fromStored($z), $z))->applyImport(self::selection($a));
+                        ProxyLog::record($z, 'import', $result['results'], 'MCP ('.$ctx->token->name.')');
+                        ZoneStatus::forget($z);
 
-            new Tool('npm_push_apply', 'Apply a push to NPM', 'WRITES to the live Nginx Proxy Manager: updates or creates proxy hosts for the previewed items the user approved. Never deletes. Refused if anything changed since the preview.',
-                ['items' => self::SELECTION], ['items'], 'admin', false, true,
-                fn (array $a) => self::npm(fn () => (new NpmSync(NpmClient::fromStored()))->applyPush(self::selection($a)))),
+                        return ['zone' => $z->name] + $result + ZoneTools::hint($a, $z);
+                    });
+                }),
+
+            new Tool('npm_push_preview', 'Preview pushing to NPM', 'Read-only. Compare the zone\'s LabMan services that have a domain with its NPM proxy hosts and list every proxy host that would be updated or created, including mirrors of other zones\' hosts and orphaned mirrors (listed, never deleted). Each item has a plain-language summary, warnings and, if it cannot be applied, errors. Show the user the exact diff, then call npm_push_apply with what they approve.',
+                $zone, [], 'admin', true, false, function (array $a) {
+                    $z = ZoneTools::zone($a);
+
+                    return self::npm(fn () => ['zone' => $z->name, 'items' => self::present((new NpmSync(NpmClient::fromStored($z), $z))->pushPlan(), $z->name, false), 'next' => 'Show the user these items, then npm_push_apply (same zone) with the ones they approve (key + fingerprint). Nothing is written until then.'] + ZoneTools::hint($a, $z));
+                }),
+
+            new Tool('npm_push_apply', 'Apply a push to NPM', 'WRITES to the live Nginx Proxy Manager of a zone: updates or creates proxy hosts for the previewed items the user approved (and requests a certificate only where the previewed item says so). Never deletes. Refused if anything changed since the preview, and for an item with an error.',
+                $zone + ['items' => self::SELECTION], ['items'], 'admin', false, true, function (array $a, McpContext $ctx) {
+                    $z = ZoneTools::zone($a);
+
+                    return self::npm(function () use ($a, $z, $ctx) {
+                        $result = (new NpmSync(NpmClient::fromStored($z), $z))->applyPush(self::selection($a));
+                        ProxyLog::record($z, 'preview', $result['results'], 'MCP ('.$ctx->token->name.')');
+                        ZoneStatus::forget($z);
+
+                        return ['zone' => $z->name] + $result + ZoneTools::hint($a, $z);
+                    });
+                }),
         ];
     }
 
     /** Run an NPM operation and turn its failures into tool errors. */
     private static function npm(Closure $run): array
     {
-        try {
-            return $run();
-        } catch (NpmException $e) {
-            throw new ToolException($e->getMessage());
-        }
+        return ZoneTools::npm($run);
     }
 
-    /** @param list<array<string, mixed>> $plan @return list<array<string, mixed>> */
-    private static function present(array $plan): array
+    /**
+     * What a client needs from a preview item: its key and fingerprint, the changes, warnings, errors and one plain sentence.
+     *
+     * @param  list<array<string, mixed>>  $plan
+     * @return list<array<string, mixed>>
+     */
+    public static function present(array $plan, string $proxy = 'Nginx Proxy Manager', bool $isImport = false): array
     {
-        return array_map(
-            fn ($i) => array_intersect_key($i, array_flip(['key', 'title', 'action', 'changes', 'warnings', 'fingerprint'])),
-            $plan,
-        );
+        return array_map(function ($i) use ($proxy, $isImport) {
+            $item = array_intersect_key($i, array_flip(['key', 'title', 'action', 'changes', 'warnings', 'fingerprint']));
+            if (! empty($i['errors'])) {
+                $item['errors'] = $i['errors'];
+            }
+            $item['summary'] = PlanText::describe($i, $proxy, $isImport);
+
+            return $item;
+        }, $plan);
     }
 
     /** @return array<string, string> key => fingerprint */

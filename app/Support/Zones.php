@@ -30,6 +30,26 @@ final class Zones
         return self::default()?->id;
     }
 
+    /**
+     * Make a zone the default. Only the default zone reads its domains from the settings, so handing the flag over
+     * swaps them: the old default keeps what the settings held, and the new default's own domains become the settings.
+     */
+    public static function makeDefault(Zone $zone): void
+    {
+        if ($zone->is_default) {
+            return;
+        }
+
+        $old = self::default();
+        if ($old && $old->id !== $zone->id) {
+            $old->forceFill(['is_default' => false, 'domains' => array_filter($old->domains()) ?: null])->save();
+        }
+
+        $own = $zone->domains();
+        Settings::set(['local_domains' => implode(', ', $own['local']), 'public_domains' => implode(', ', $own['public'])]);
+        $zone->forceFill(['is_default' => true, 'domains' => null])->save();
+    }
+
     /** Progressive disclosure: with one zone the zone screens and form fields stay out of the way. */
     public static function multiple(): bool
     {

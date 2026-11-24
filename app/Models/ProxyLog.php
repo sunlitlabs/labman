@@ -22,8 +22,9 @@ class ProxyLog extends Model
      * Remember what an apply did for a zone. Nothing is written when nothing happened.
      *
      * @param  list<array<string, string>>  $results  as the apply returned them (title, outcome, message)
+     * @param  string|null  $who  who applied it when that is not the signed-in admin (an MCP client)
      */
-    public static function record(Zone $zone, string $source, array $results): void
+    public static function record(Zone $zone, string $source, array $results, ?string $who = null): void
     {
         $applied = count(array_filter($results, fn ($r) => ($r['outcome'] ?? '') === 'applied'));
         $failed = count(array_filter($results, fn ($r) => ($r['outcome'] ?? '') === 'failed'));
@@ -32,7 +33,7 @@ class ProxyLog extends Model
         }
 
         self::create([
-            'zone_id' => $zone->id, 'source' => $source, 'who' => $source === 'automatic' ? null : auth()->user()?->name,
+            'zone_id' => $zone->id, 'source' => $source, 'who' => $who ?? ($source === 'automatic' ? null : auth()->user()?->name),
             'applied' => $applied, 'failed' => $failed,
             'results' => array_map(fn ($r) => ['title' => mb_substr((string) ($r['title'] ?? ''), 0, 200), 'outcome' => $r['outcome'] ?? '', 'message' => mb_substr((string) ($r['message'] ?? ''), 0, 300)], array_slice($results, 0, 30)),
         ]);

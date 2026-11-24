@@ -37,6 +37,7 @@ final class McpServer
             CatalogTools::all(),
             \App\Mcp\Tools\NpmTools::all(),
             \App\Mcp\Tools\InventoryTools::all(),
+            \App\Mcp\Tools\ZoneTools::all(),
             \App\Mcp\Tools\SemaphoreTools::all(),
         );
     }

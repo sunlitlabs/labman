@@ -173,7 +173,11 @@ class ZoneController extends Controller
     private function data(Request $request, ?Zone $zone = null): array
     {
         $v = $request->validate([
-            'name' => ['required', 'string', 'max:60', Rule::unique('zones', 'name')->ignore($zone)],
+            'name' => ['required', 'string', 'max:60', function (string $attribute, mixed $value, \Closure $fail) use ($zone) {
+                if (is_string($value) && \App\Models\Zone::query()->whereRaw('lower(name) = ?', [mb_strtolower(trim($value))])->when($zone, fn ($q) => $q->where('id', '!=', $zone->id))->exists()) {
+                    $fail('The name has already been taken (zone names are not case-sensitive).');
+                }
+            }],
             'level' => ['required', 'integer', 'between:0,100'],
             'color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'icon' => ['nullable', 'string', 'max:80', Check::icon()],
@@ -242,23 +246,8 @@ class ZoneController extends Controller
         return [$data, $request->boolean('is_default')];
     }
 
-    /**
-     * Only the default zone reads its domains from the settings, so handing the flag over swaps them: the old
-     * default keeps what the settings held, and the new default's own domains become the settings.
-     */
     private function makeDefault(Zone $zone): void
     {
-        if ($zone->is_default) {
-            return;
-        }
-
-        $old = Zones::default();
-        if ($old && $old->id !== $zone->id) {
-            $old->forceFill(['is_default' => false, 'domains' => array_filter($old->domains()) ?: null])->save();
-        }
-
-        $own = $zone->domains();
-        Settings::set(['local_domains' => implode(', ', $own['local']), 'public_domains' => implode(', ', $own['public'])]);
-        $zone->forceFill(['is_default' => true, 'domains' => null])->save();
+        Zones::makeDefault($zone);
     }
 }
