@@ -210,6 +210,7 @@ final class YamlConfig
             'monitor' => $s->monitor ? null : false,
             'check_tcp' => $s->check_tcp ? null : false,
             'icon' => $s->icon,
+            'certificate' => $s->cert_mode,
         ], fn ($v) => $v !== null && $v !== ''))->all();
 
         $document = ['settings' => $settings];
@@ -226,6 +227,7 @@ final class YamlConfig
                 // The default zone's domains are already settings.local_domains / public_domains.
                 'domains' => $z->is_default ? null : (array_filter($z->domains()) ?: null),
                 'proxy_address' => $z->proxy_address,
+                'certificates' => $z->certificate_policy ?: null,
                 'notes' => $z->notes,
             ], fn ($v) => $v !== null && $v !== ''))->values()->all();
 
@@ -457,6 +459,22 @@ final class YamlConfig
                 }
             }
 
+            if (array_key_exists('certificates', $item) && $item['certificates'] !== null) {
+                if (! is_array($item['certificates']) || ($item['certificates'] !== [] && array_is_list($item['certificates']))) {
+                    $errors[] = "{$who}: 'certificates' must be a mapping";
+                } else {
+                    [$policy, $problems] = \App\Npm\CertificatePolicy::validate($item['certificates']);
+                    foreach ($problems as $problem) {
+                        $errors[] = "{$who}: certificates: {$problem}";
+                    }
+                    $unknownKeys = array_diff(array_keys($item['certificates']), ['strategy', 'edge_managed', 'pins', 'origin_certificates', 'letsencrypt_email', 'dns_template', 'wildcard']);
+                    if ($unknownKeys) {
+                        $errors[] = "{$who}: certificates: unknown key(s): ".implode(', ', array_map('strval', $unknownKeys));
+                    }
+                    $row['certificate_policy'] = $policy ?: null;
+                }
+            }
+
             $proxy = self::text($item['proxy_address'] ?? null);
             if ($proxy !== null && $proxy !== '') {
                 if (Hosts::isHostOrIp($proxy)) {
@@ -601,6 +619,22 @@ final class YamlConfig
         }
 
         return $out;
+    }
+
+    /** The optional `certificate:` of a service: none | letsencrypt_http | letsencrypt_dns | existing:<id>. @param list<string> $errors @return array{cert_mode?: string} */
+    private static function certRef(string $who, array $item, array &$errors): array
+    {
+        $mode = self::text($item['certificate'] ?? null);
+        if ($mode === null || $mode === '' || $mode === 'auto') {
+            return [];
+        }
+        if (! preg_match('/^(none|letsencrypt_http|letsencrypt_dns|existing:[1-9][0-9]*)$/', $mode)) {
+            $errors[] = "{$who}: 'certificate' must be none, letsencrypt_http, letsencrypt_dns or existing:<NPM certificate id>";
+
+            return [];
+        }
+
+        return ['cert_mode' => $mode];
     }
 
     /** The optional `zone: <name>` of a server or service. @param list<string> $errors @return array{zone?: string} */
@@ -773,7 +807,7 @@ final class YamlConfig
                     'monitor' => $flags['monitor'],
                     'check_tcp' => $flags['check_tcp'],
                     'icon' => $icon,
-                ] + self::zoneRef($who, $item, $errors);
+                ] + self::zoneRef($who, $item, $errors) + self::certRef($who, $item, $errors);
             }
         }
 

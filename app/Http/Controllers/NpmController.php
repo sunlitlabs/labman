@@ -29,17 +29,20 @@ class NpmController extends Controller
 
         // The certificate pickers need NPM's list; without a (working) connection the page falls back to ids.
         $certificates = null;
+        $report = null;
         if ($connection) {
             try {
-                $certificates = NpmClient::fromStored($zone)->certificates();
+                $client = NpmClient::fromStored($zone);
+                $certificates = $client->certificates();
+                $report = (new NpmSync($client, $zone))->certificateReport();
             } catch (\Throwable) {
-                $certificates = null;
+                $certificates = $certificates ?? null;
             }
         }
 
         return view('npm.index', [
             'zone' => $zone, 'zones' => Zones::all(), 'zp' => $this->zp($zone),
-            'connection' => $connection, 'certificates' => $certificates, 'values' => \App\Support\Settings::all(),
+            'connection' => $connection, 'certificates' => $certificates, 'certReport' => $report, 'values' => \App\Support\Settings::all(),
             'auto' => NpmAuto::enabled(), 'last' => NpmAuto::last(),
             'proxies' => Zones::multiple() ? Zones::all()->map(fn (Zone $z) => ProxyStatus::of($z))->all() : [],
         ]);

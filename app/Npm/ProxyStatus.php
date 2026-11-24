@@ -12,11 +12,11 @@ use App\Models\Zone;
 final class ProxyStatus
 {
     /**
-     * @return array{zone: Zone, state: 'none'|'ok'|'error', message: ?string, version: ?string, hosts: int, unknown_to_labman: int, to_push: int}
+     * @return array{zone: Zone, state: 'none'|'ok'|'error', message: ?string, version: ?string, hosts: int, unknown_to_labman: int, to_push: int, cert_ok: int, cert_expiring: int, cert_problems: int}
      */
     public static function of(Zone $zone): array
     {
-        $out = ['zone' => $zone, 'state' => 'none', 'message' => null, 'version' => null, 'hosts' => 0, 'unknown_to_labman' => 0, 'to_push' => 0];
+        $out = ['zone' => $zone, 'state' => 'none', 'message' => null, 'version' => null, 'hosts' => 0, 'unknown_to_labman' => 0, 'to_push' => 0, 'cert_ok' => 0, 'cert_expiring' => 0, 'cert_problems' => 0];
 
         $connection = Connection::get($zone);
         if ($connection === null) {
@@ -32,6 +32,10 @@ final class ProxyStatus
             $out['hosts'] = count($import);
             $out['unknown_to_labman'] = count(array_filter($import, fn ($i) => $i['action'] === 'create'));
             $out['to_push'] = count(array_filter($sync->pushPlan(), fn ($i) => in_array($i['action'], ['create', 'update'], true)));
+            $c = $sync->certificateReport()['counts'];
+            $out['cert_ok'] = $c['ok'];
+            $out['cert_expiring'] = $c['expiring'];
+            $out['cert_problems'] = $c['expired'] + $c['uncovered'] + $c['untrusted'] + $c['missing'] + $c['unknown'];
             $out['state'] = 'ok';
         } catch (NpmException $e) {
             $out['state'] = 'error';

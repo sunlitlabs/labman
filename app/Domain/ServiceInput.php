@@ -41,6 +41,17 @@ final class ServiceInput
             unset($in['update_workbook']);
         }
 
+        // The form offers a strategy and, separately, a specific NPM certificate id; the id wins when given.
+        if (array_key_exists('cert_existing', $in)) {
+            if (filled($in['cert_existing'])) {
+                $in['cert_mode'] = 'existing:'.(int) $in['cert_existing'];
+            }
+            unset($in['cert_existing']);
+        }
+        if (array_key_exists('cert_mode', $in) && $in['cert_mode'] === 'auto') {
+            $in['cert_mode'] = null;
+        }
+
         if (! isset($in['path']) || $in['path'] === '') {
             $in['path'] = '/';
         }
@@ -96,6 +107,8 @@ final class ServiceInput
             'update_template' => ['nullable', 'integer', 'min:1', 'required_with:update_project'],
             // Only to override the zone of the service's server; empty means "same as the server".
             'zone_id' => ['nullable', 'integer', 'exists:zones,id'],
+            // The service's own certificate choice; empty follows the zone's policy.
+            'cert_mode' => ['nullable', 'string', 'regex:/^(none|letsencrypt_http|letsencrypt_dns|existing:[1-9][0-9]*)$/'],
         ];
     }
 
@@ -119,6 +132,9 @@ final class ServiceInput
         $validated['health_path'] = filled($validated['health_path'] ?? null) ? $validated['health_path'] : null;
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
         $validated['public_domain'] = filled($validated['public_domain'] ?? null) ? strtolower($validated['public_domain']) : null;
+        if (array_key_exists('cert_mode', $validated)) {
+            $validated['cert_mode'] = filled($validated['cert_mode']) ? $validated['cert_mode'] : null;
+        }
         if (array_key_exists('zone_id', $validated)) {
             $validated['zone_id'] = filled($validated['zone_id']) ? (int) $validated['zone_id'] : null;
         }
@@ -178,6 +194,7 @@ final class ServiceInput
             'update_project' => $service->update_project,
             'update_template' => $service->update_template,
             'zone_id' => $service->zone_id,
+            'cert_mode' => $service->cert_mode,
         ];
     }
 }

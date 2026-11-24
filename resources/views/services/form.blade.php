@@ -139,8 +139,24 @@
                 @endif
             </section>
 
-            <details class="formcard" @if (old('notes', $service->notes) || old('icon', $service->icon) || ! old('verify_tls', $service->verify_tls) || old('websockets', $service->websockets)) open @endif>
-                <summary>More: notes, icon, TLS, websockets</summary>
+            <details class="formcard" @if (old('notes', $service->notes) || old('icon', $service->icon) || old('cert_mode', $service->cert_mode) || ! old('verify_tls', $service->verify_tls) || old('websockets', $service->websockets)) open @endif>
+                <summary>More: notes, icon, certificate, TLS, websockets</summary>
+                @php($certMode = (string) old('cert_mode', $service->cert_mode))
+                <div class="grid2">
+                    <div class="field">
+                        <label for="cert_mode">Certificate on the proxy <span class="hint">normally the zone's policy decides</span></label>
+                        <select id="cert_mode" name="cert_mode">
+                            <option value="auto" @selected($certMode === '' || str_starts_with($certMode, 'existing:'))>Automatic (the zone's policy)</option>
+                            <option value="none" @selected($certMode === 'none')>None (plain HTTP)</option>
+                            <option value="letsencrypt_http" @selected($certMode === 'letsencrypt_http')>Let's Encrypt, HTTP challenge</option>
+                            <option value="letsencrypt_dns" @selected($certMode === 'letsencrypt_dns')>Let's Encrypt, DNS challenge</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="cert_existing">Or a specific NPM certificate id <span class="hint">overrides the choice on the left</span></label>
+                        <input id="cert_existing" name="cert_existing" type="number" min="1" value="{{ old('cert_existing', str_starts_with($certMode, 'existing:') ? substr($certMode, 9) : '') }}">
+                    </div>
+                </div>
                 <div class="grid2">
                     <div class="field">
                         <label for="notes">Notes <span class="hint">optional, shown on the Services page</span></label>

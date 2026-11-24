@@ -34,7 +34,7 @@
                         </div>
                         <div class="cell">
                             @if ($p['state'] === 'ok')
-                                <small>{{ $p['unknown_to_labman'] }} in NPM that LabMan does not know · {{ $p['to_push'] }} LabMan change(s) to send</small>
+                                <small>{{ $p['unknown_to_labman'] }} in NPM that LabMan does not know · {{ $p['to_push'] }} LabMan change(s) to send · certificates: {{ $p['cert_ok'] + $p['cert_expiring'] }} covered{{ $p['cert_expiring'] ? ', '.$p['cert_expiring'].' expiring' : '' }}{{ $p['cert_problems'] ? ', '.$p['cert_problems'].' to fix' : '' }}</small>
                             @endif
                         </div>
                     </article>
@@ -84,6 +84,29 @@
                 Services are matched to proxy hosts by NPM host id (set on first import/push) or by their domain.
                 The login is stored encrypted with this install's application key and is never shown, exported or sent to an MCP client.
             </p>
+        </div>
+    @endif
+
+    @if ($connection && $certReport)
+        @php($cc = $certReport['counts'])
+        @php($issues = array_filter($certReport['rows'], fn ($r) => ! in_array($r['state'], ['ok', 'none'], true)))
+        <div class="card" id="certificates">
+            <h2>Certificates
+                <span class="pill pill-{{ $issues ? 'degraded' : 'up' }}">{{ $issues ? count($issues).' to look at' : 'all covered' }}</span>
+            </h2>
+            @php($broken = $cc['uncovered'] + $cc['expired'] + $cc['untrusted'] + $cc['unknown'])
+            @php($summary = ($cc['ok'] + $cc['expiring']).' host name(s) have a valid certificate'.($cc['expiring'] ? ', '.$cc['expiring'].' expiring soon' : '').($cc['missing'] ? ', '.$cc['missing'].' have none' : '').($broken ? ', '.$broken.' have a certificate that does not work' : '').'.')
+            <p class="muted">{{ $summary }}
+                A certificate that already covers a name is used before a new one is requested; nothing is requested until you apply a previewed change.
+                <a href="{{ \Illuminate\Support\Facades\Route::has('zones.edit') ? route('zones.edit', $zone) : '#' }}">Certificate settings of the {{ $zone->name }} zone</a></p>
+            @if ($issues)
+                <ul class="results">
+                    @foreach ($issues as $r)
+                        <li class="bad"><strong>{{ $r['domain'] }}</strong> <span class="muted">({{ $r['service'] }})</span>: {{ $r['detail'] }}</li>
+                    @endforeach
+                </ul>
+                <div class="actions"><a class="btn" href="{{ route('npm.push', $zp) }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its certificates and proxy hosts","Working out the fixes"]'>Preview the fixes</a></div>
+            @endif
         </div>
     @endif
 

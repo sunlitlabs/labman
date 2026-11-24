@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** A trust level that servers (and through them, services) belong to. */
 class Zone extends Model
 {
-    protected $fillable = ['name', 'level', 'color', 'icon', 'is_default', 'cidrs', 'domains', 'proxy_address', 'notes'];
+    protected $fillable = ['name', 'level', 'color', 'icon', 'is_default', 'cidrs', 'domains', 'proxy_address', 'notes', 'certificate_policy'];
 
     protected function casts(): array
     {
-        return ['level' => 'integer', 'is_default' => 'boolean', 'cidrs' => 'array', 'domains' => 'array'];
+        return ['level' => 'integer', 'is_default' => 'boolean', 'cidrs' => 'array', 'domains' => 'array', 'certificate_policy' => 'array'];
     }
 
     public function servers(): HasMany
@@ -42,6 +42,12 @@ class Zone extends Model
         $stored = is_array($this->domains) ? $this->domains : [];
 
         return ['local' => Domains::parse($stored['local'] ?? []), 'public' => Domains::parse($stored['public'] ?? [])];
+    }
+
+    /** How this zone's proxy gets certificates. */
+    public function certificatePolicy(): \App\Npm\CertificatePolicy
+    {
+        return \App\Npm\CertificatePolicy::fromArray($this->certificate_policy);
     }
 
     /** 'local' or 'public' if the host sits under one of this zone's domains (public wins a tie), else null. */

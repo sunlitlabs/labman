@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Server;
 use App\Models\Service;
 use App\Models\Zone;
+use App\Npm\CertificatePolicy;
+use App\Npm\Connection;
+use App\Npm\NpmClient;
 use App\Rules\Check;
 use App\Support\Domains;
 use App\Support\Settings;
@@ -29,7 +32,7 @@ class ZoneController extends Controller
 
     public function create()
     {
-        return view('zones.form', ['zone' => new Zone(['level' => 50])]);
+        return view('zones.form', ['zone' => new Zone(['level' => 50]), 'certificates' => null]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -47,7 +50,17 @@ class ZoneController extends Controller
 
     public function edit(Zone $zone)
     {
-        return view('zones.form', ['zone' => $zone]);
+        // The proxy's certificates help fill in the certificate settings; without a (working) proxy the form still works.
+        $certificates = null;
+        if ($connection = Connection::get($zone)) {
+            try {
+                $certificates = (new NpmClient($connection, 4.0))->certificates();
+            } catch (\Throwable) {
+                $certificates = null;
+            }
+        }
+
+        return view('zones.form', ['zone' => $zone, 'certificates' => $certificates]);
     }
 
     public function update(Request $request, Zone $zone): RedirectResponse
@@ -91,7 +104,25 @@ class ZoneController extends Controller
             'public_domains' => ['nullable', Check::domainList()],
             'proxy_address' => ['nullable', 'string', 'max:253', Check::hostOrIp()],
             'notes' => ['nullable', 'string', 'max:500'],
+            'cert_strategy' => ['nullable', Rule::in(CertificatePolicy::STRATEGIES)],
+            'cert_pins' => ['nullable', 'string', 'max:2000'],
+            'cert_origin' => ['nullable', 'string', 'max:200'],
+            'cert_email' => ['nullable', 'string', 'max:254'],
+            'cert_dns_template' => ['nullable', 'integer', 'min:1'],
         ]);
+
+        [$policy, $problems] = CertificatePolicy::validate([
+            'strategy' => $v['cert_strategy'] ?? 'existing',
+            'edge_managed' => $request->boolean('cert_edge_managed'),
+            'pins' => CertificatePolicy::parsePinText($v['cert_pins'] ?? ''),
+            'origin_certificates' => preg_split('/[\s,;]+/', (string) ($v['cert_origin'] ?? ''), -1, PREG_SPLIT_NO_EMPTY),
+            'letsencrypt_email' => $v['cert_email'] ?? '',
+            'dns_template' => $v['cert_dns_template'] ?? null,
+            'wildcard' => $request->boolean('cert_wildcard'),
+        ]);
+        if ($problems) {
+            throw ValidationException::withMessages(['certificates' => array_map('ucfirst', $problems)]);
+        }
 
         $cidrs = Zones::parseCidrs($v['cidrs'] ?? '');
         foreach ($cidrs as $cidr) {
@@ -108,6 +139,7 @@ class ZoneController extends Controller
             'cidrs' => $cidrs ?: null,
             'proxy_address' => filled($v['proxy_address'] ?? null) ? trim($v['proxy_address']) : null,
             'notes' => $v['notes'] ?? null,
+            'certificate_policy' => $policy ?: null,
         ];
 
         // The default zone's domains are the two lists on the Nginx Proxy Manager page; only other zones keep their own.

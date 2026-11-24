@@ -24,6 +24,11 @@ final class FakeNpm
 
     public bool $twoFactor = false;
 
+    /** @var list<array<string, mixed>> the bodies of every certificate request seen */
+    public array $certificateRequests = [];
+
+    public bool $failCertificateRequests = false;
+
     public string $password = 'npm-secret';
 
     private int $nextId = 1;
@@ -118,6 +123,28 @@ final class FakeNpm
 
         if ($path === '/api/nginx/certificates' && $method === 'GET') {
             return Http::response($this->certificates);
+        }
+
+        if (preg_match('#^/api/nginx/certificates/(\d+)$#', $path, $m) && $method === 'GET') {
+            foreach ($this->certificates as $cert) {
+                if ((int) $cert['id'] === (int) $m[1]) {
+                    return Http::response($cert);
+                }
+            }
+
+            return Http::response(['error' => ['code' => 404, 'message' => 'Not Found']], 404);
+        }
+
+        if ($path === '/api/nginx/certificates' && $method === 'POST') {
+            if ($this->failCertificateRequests) {
+                return Http::response(['error' => ['code' => 400, 'message' => 'Some challenge failed']], 400);
+            }
+            $this->certificateRequests[] = $body;
+            $id = 100 + count($this->certificateRequests);
+            $cert = ['id' => $id, 'provider' => 'letsencrypt', 'nice_name' => $body['domain_names'][0] ?? '', 'domain_names' => $body['domain_names'] ?? [], 'expires_on' => gmdate('Y-m-d H:i:s', time() + 90 * 86400), 'meta' => $body['meta'] ?? []];
+            $this->certificates[] = $cert;
+
+            return Http::response($cert, 201);
         }
 
         if ($path === '/api/nginx/proxy-hosts' && $method === 'GET') {

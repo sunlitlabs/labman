@@ -53,7 +53,7 @@ final class NpmClient
     /**
      * The certificates uploaded to NPM, reduced to what a picker needs.
      *
-     * @return list<array{id: int, name: string, domains: list<string>}>
+     * @return list<array{id: int, name: string, domains: list<string>, expires_on: ?string, provider: string}>
      */
     public function certificates(): array
     {
@@ -63,11 +63,47 @@ final class NpmClient
         foreach (is_array($certs) ? $certs : [] as $cert) {
             if (is_array($cert) && isset($cert['id'])) {
                 $domains = array_values(array_filter((array) ($cert['domain_names'] ?? []), 'is_string'));
-                $out[] = ['id' => (int) $cert['id'], 'name' => (string) ($cert['nice_name'] ?? '') ?: ($domains[0] ?? 'certificate '.$cert['id']), 'domains' => $domains];
+                $out[] = [
+                    'id' => (int) $cert['id'], 'name' => (string) ($cert['nice_name'] ?? '') ?: ($domains[0] ?? 'certificate '.$cert['id']), 'domains' => $domains,
+                    'expires_on' => is_string($cert['expires_on'] ?? null) ? $cert['expires_on'] : null, 'provider' => (string) ($cert['provider'] ?? ''),
+                ];
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Ask NPM to obtain a Let's Encrypt certificate. This is the only place a certificate is created, and callers
+     * reach it only from an applied, previewed change. For the DNS challenge the provider settings of an existing
+     * certificate are reused: they travel in this one request to NPM and are never stored or logged by LabMan.
+     *
+     * @param  list<string>  $domains
+     * @return int the new certificate's id
+     *
+     * @throws NpmException
+     */
+    public function requestCertificate(array $domains, string $email, ?int $dnsTemplate = null): int
+    {
+        $meta = ['letsencrypt_email' => $email, 'letsencrypt_agree' => true];
+
+        if ($dnsTemplate !== null) {
+            $template = $this->authed('get', "/api/nginx/certificates/{$dnsTemplate}")->json()['meta'] ?? [];
+            if (empty($template['dns_provider']) || empty($template['dns_provider_credentials'])) {
+                throw new NpmException("Certificate #{$dnsTemplate} has no DNS provider settings that can be reused. Choose a Let's Encrypt DNS-challenge certificate made in NPM.");
+            }
+            $meta += ['dns_challenge' => true, 'dns_provider' => $template['dns_provider'], 'dns_provider_credentials' => $template['dns_provider_credentials']]
+                + (isset($template['propagation_seconds']) ? ['propagation_seconds' => $template['propagation_seconds']] : []);
+        }
+
+        // Issuing takes a while (NPM waits for the challenge), so this one call may run much longer than the rest.
+        $created = $this->authed('post', '/api/nginx/certificates', ['provider' => 'letsencrypt', 'domain_names' => array_values($domains), 'meta' => $meta], 180.0)->json();
+        $id = (int) ($created['id'] ?? 0);
+        if ($id < 1) {
+            throw new NpmException('NPM did not return the new certificate.');
+        }
+
+        return $id;
     }
 
     /** @param array<string, mixed> $payload @return array<string, mixed> */
@@ -105,19 +141,19 @@ final class NpmClient
     }
 
     /** @param array<string, mixed>|null $body */
-    private function authed(string $method, string $path, ?array $body = null): Response
+    private function authed(string $method, string $path, ?array $body = null, ?float $timeout = null): Response
     {
         if ($this->token === null) {
             $this->login();
         }
 
-        return $this->send($method, $path, $body, $this->token);
+        return $this->send($method, $path, $body, $this->token, $timeout);
     }
 
     /** @param array<string, mixed>|null $body */
-    private function send(string $method, string $path, ?array $body = null, ?string $token = null): Response
+    private function send(string $method, string $path, ?array $body = null, ?string $token = null, ?float $timeout = null): Response
     {
-        $request = $this->request($token);
+        $request = $this->request($token)->timeout($timeout ?? $this->timeout);
 
         try {
             $response = $body === null ? $request->{$method}($path) : $request->{$method}($path, $body);

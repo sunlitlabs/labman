@@ -166,7 +166,7 @@ final class NpmAuto
         $sync = new NpmSync(NpmClient::fromStored($zone), $zone);
         $selected = [];
 
-        foreach ($sync->pushPlan($scopes === [] ? $services : null) as $item) {
+        foreach ($sync->pushPlan($scopes === [] ? $services : null, true) as $item) {
             $wanted = in_array($item['data']['service_id'] ?? 0, $services, true) || in_array($item['data']['scope'] ?? '', $scopes, true);
             if ($wanted && in_array($item['action'], ['create', 'update'], true)) {
                 $selected[$item['key']] = $item['fingerprint'];

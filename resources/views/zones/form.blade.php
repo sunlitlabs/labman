@@ -73,6 +73,70 @@
                 </div>
             </section>
 
+            @php($policy = $zone->certificatePolicy())
+            <section class="formcard">
+                <h2>Certificates</h2>
+                <p class="sub">How this zone's proxy gets certificates. A certificate that already covers a name is always used before a new one is requested, and nothing is requested until you apply a previewed change.</p>
+                <div class="field">
+                    <label for="cert_strategy">For hosts with no certificate</label>
+                    <select id="cert_strategy" name="cert_strategy">
+                        @foreach (\App\Npm\CertificatePolicy::STRATEGY_LABELS as $value => $label)
+                            <option value="{{ $value }}" @selected(old('cert_strategy', $policy->strategy) === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <label class="check">
+                    <input type="checkbox" name="cert_edge_managed" value="1" @checked(old('cert_edge_managed', $policy->edgeManaged))>
+                    <span>This proxy sits behind a CDN or tunnel that terminates TLS publicly <span class="hint">its certificates are origin certificates: never requested from Let's Encrypt here, and never reused on a proxy that browsers connect to directly</span></span>
+                </label>
+                <div class="field">
+                    <label for="cert_pins">Always use this certificate for a domain <span class="hint">one per line: <code>example.dev = 12</code> (domain = NPM certificate id)</span></label>
+                    <textarea id="cert_pins" name="cert_pins" rows="3" spellcheck="false" placeholder="example.dev = 12">{{ old('cert_pins', $policy->pinText()) }}</textarea>
+                </div>
+                <div class="grid2">
+                    <div class="field">
+                        <label for="cert_origin">Origin certificates <span class="hint">ids of certificates here that browsers do not trust, comma separated</span></label>
+                        <input id="cert_origin" name="cert_origin" type="text" maxlength="200" placeholder="12" value="{{ old('cert_origin', implode(', ', $policy->originIds)) }}">
+                    </div>
+                    <div class="field">
+                        <label for="cert_email">Let's Encrypt e-mail <span class="hint">needed to request certificates</span></label>
+                        <input id="cert_email" name="cert_email" type="email" maxlength="254" value="{{ old('cert_email', $policy->email) }}">
+                    </div>
+                    <div class="field">
+                        <label for="cert_dns_template">DNS challenge: reuse the provider of certificate # <span class="hint">an existing DNS-challenge certificate in this NPM; LabMan never stores the provider's token</span></label>
+                        <input id="cert_dns_template" name="cert_dns_template" type="number" min="1" value="{{ old('cert_dns_template', $policy->dnsTemplate) }}">
+                    </div>
+                </div>
+                <label class="check">
+                    <input type="checkbox" name="cert_wildcard" value="1" @checked(old('cert_wildcard', $policy->wildcard))>
+                    <span>With the DNS challenge, request one wildcard certificate for the domain (so its other hosts are covered too)</span>
+                </label>
+
+                @if ($certificates !== null)
+                    <h3>Certificates in this proxy</h3>
+                    <div class="rows">
+                        @forelse ($certificates as $c)
+                            @php($left = \App\Npm\Certificates::daysLeft($c))
+                            <article class="row">
+                                <div class="cell name"><span class="nm">#{{ $c['id'] }} {{ $c['name'] }}</span><small>{{ $c['provider'] === 'letsencrypt' ? "Let's Encrypt" : 'custom' }}</small></div>
+                                <div class="cell">@foreach ($c['domains'] as $d)<span class="dom">{{ $d }}</span>@endforeach</div>
+                                <div class="cell">
+                                    @if ($left === null)<small class="muted">no expiry given</small>
+                                    @elseif ($left < 0)<span class="pill pill-down">expired</span>
+                                    @elseif ($left < \App\Npm\Certificates::EXPIRY_WARNING_DAYS)<span class="pill pill-degraded">{{ $left }} day(s) left</span>
+                                    @else<small>{{ $left }} days left</small>@endif
+                                    @if (in_array($c['id'], $policy->originIds, true))<span class="pill pill-unknown">origin</span>@endif
+                                </div>
+                            </article>
+                        @empty
+                            <p class="muted">This proxy holds no certificates yet.</p>
+                        @endforelse
+                    </div>
+                @elseif ($zone->exists)
+                    <p class="hint">Connect this zone's proxy on the Nginx Proxy Manager page to see its certificates here.</p>
+                @endif
+            </section>
+
             <div class="savebar">
                 <button class="primary" type="submit">Save</button>
                 <a class="btn" href="{{ route('zones.index') }}">Cancel</a>

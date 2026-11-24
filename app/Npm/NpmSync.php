@@ -206,9 +206,10 @@ final class NpmSync
 
     /**
      * @param  list<int>|null  $only  only these services (null = all)
+     * @param  bool  $auto  for automatic updates: never request a certificate, and leave a host's own working certificate alone
      * @return list<array<string, mixed>> plan items (LabMan -> NPM)
      */
-    public function pushPlan(?array $only = null): array
+    public function pushPlan(?array $only = null, bool $auto = false): array
     {
         $hosts = collect($this->client->proxyHosts());
         $items = [];
@@ -219,7 +220,7 @@ final class NpmSync
         foreach ($services as $service) {
             foreach (['local' => $service->domain, 'public' => $service->public_domain] as $scope => $name) {
                 if (filled($name)) {
-                    $items[] = $this->pushItem($service, $hosts, $scope);
+                    $items[] = $this->pushItem($service, $hosts, $scope, $auto);
                 }
             }
         }
@@ -236,9 +237,26 @@ final class NpmSync
         $results = [];
         $applied = 0;
 
+        $requested = [];
+
         foreach ($this->selectedItems($this->pushPlan(), $selected, ['create', 'update']) as $item) {
             try {
                 $data = $item['data'];
+                $note = '';
+
+                // A certificate is requested here and nowhere else: only for an item that was previewed and ticked, and once per set of names.
+                if (! empty($data['cert_request'])) {
+                    $req = $data['cert_request'];
+                    $policy = $this->zone->certificatePolicy();
+                    $key = $req['method'].'|'.implode(',', $req['domains']);
+                    $certId = $requested[$key] ??= $this->client->requestCertificate($req['domains'], (string) $policy->email, $req['method'] === 'letsencrypt_dns' ? $policy->dnsTemplate : null);
+                    $data['payload']['certificate_id'] = $certId;
+                    if ($req['ssl']) {
+                        $data['payload'] = array_merge($data['payload'], ['ssl_forced' => true, 'http2_support' => true]);
+                    }
+                    $this->certs = false; // the list changed
+                    $note = " Requested certificate #{$certId} for ".implode(', ', $req['domains']).'.';
+                }
 
                 if ($item['action'] === 'create') {
                     $created = $this->client->createProxyHost($data['payload']);
@@ -253,7 +271,7 @@ final class NpmSync
                 }
 
                 $applied++;
-                $results[] = ['title' => $item['title'], 'outcome' => 'applied', 'message' => $item['action'] === 'create' ? 'Proxy host created in NPM.' : 'Proxy host updated in NPM.'];
+                $results[] = ['title' => $item['title'], 'outcome' => 'applied', 'message' => ($item['action'] === 'create' ? 'Proxy host created in NPM.' : 'Proxy host updated in NPM.').$note];
             } catch (NpmException $e) {
                 $results[] = ['title' => $item['title'], 'outcome' => 'failed', 'message' => $e->getMessage()];
             }
@@ -263,7 +281,7 @@ final class NpmSync
     }
 
     /** @param Collection<int, array<string, mixed>> $hosts */
-    private function pushItem(Service $service, Collection $hosts, string $scope = 'local'): array
+    private function pushItem(Service $service, Collection $hosts, string $scope = 'local', bool $auto = false): array
     {
         $public = $scope === 'public';
         $domain = mb_strtolower((string) ($public ? $service->public_domain : $service->domain));
@@ -288,8 +306,10 @@ final class NpmSync
             ?? $hosts->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true));
 
         if ($host === null) {
-            // The certificate chosen for this kind of domain (Domains on the NPM page), so a new host is not left without SSL.
-            $cert = $this->certFor($scope);
+            // The certificate: one that already covers the name, else what the zone's policy asks for.
+            $decision = $this->decide($service, $domain, $scope, $auto);
+            $cert = $decision['mode'] === 'use' ? (int) $decision['certificate_id'] : 0;
+            $request = $decision['mode'] === 'request' ? $this->requestData($decision, true) : null;
             $payload = $desired + [
                 'domain_names' => [$domain],
                 'certificate_id' => $cert, 'ssl_forced' => $cert > 0, 'http2_support' => $cert > 0, 'hsts_enabled' => false, 'hsts_subdomains' => false,
@@ -299,12 +319,19 @@ final class NpmSync
 
             $changes = [['field' => 'proxy host', 'from' => null, 'to' => "{$domain} → {$service->scheme}://{$address}:{$port}"]];
 
+            if ($cert > 0 || $request) {
+                $changes[] = ['field' => 'certificate', 'from' => null, 'to' => $decision['why']];
+            }
+            $intro = match (true) {
+                $cert > 0 => 'No proxy host for this domain exists yet. A new one is created with '.$decision['why'].', forcing SSL.',
+                $request !== null => 'No proxy host for this domain exists yet. A new one is created with '.$decision['why'].'. It is requested when you apply, and SSL is forced.',
+                default => 'No proxy host for this domain exists yet. A new one is created without SSL; set a certificate policy for the zone (or pick a certificate) so new hosts get one.',
+            };
+
             return $this->finish($base + [
                 'action' => 'create', 'changes' => $changes,
-                'data' => ['service_id' => $service->id, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload],
-            ], [$cert > 0
-                ? "No proxy host for this domain exists yet. A new one is created with the {$scope}-domain certificate chosen under Domains on the NPM page (#{$cert}), forcing SSL."
-                : 'No proxy host for this domain exists yet. A new one is created without SSL; add a certificate in NPM afterwards (or pick one under Domains on this page so new hosts get it).']);
+                'data' => ['service_id' => $service->id, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload, 'cert_request' => $request],
+            ], [$intro, ...$decision['warnings']]);
         }
 
         $hostId = (int) $host['id'];
@@ -325,15 +352,26 @@ final class NpmSync
             }
         }
 
-        // The certificate chosen for this kind of domain is the one the host should use.
-        $cert = $this->certFor($scope);
+        // The certificate: an explicit choice wins; otherwise a host with no certificate (or a broken one) gets one that covers it.
+        $decision = $this->decide($service, $domain, $scope, $auto);
         $currentCert = (int) ($host['certificate_id'] ?? 0);
-        if ($cert > 0 && $currentCert !== $cert) {
-            $payload['certificate_id'] = $cert;
+        $known = $currentCert > 0 ? collect($this->certificates() ?? [])->firstWhere('id', $currentCert) : null;
+        $problem = $known !== null ? $this->certificateProblems($known, $domain) : [];
+        $broken = $known !== null && (! Certificates::coversHost($known, $domain) || Certificates::expired($known) || $this->untrusted($known));
+        $mayReplace = $decision['explicit'] || $currentCert === 0 || $broken;
+        $mayReplace = $mayReplace && ! ($auto && ! $decision['explicit'] && $currentCert > 0); // automatic updates never swap a host's own certificate
+        $from = $currentCert > 0 ? "#{$currentCert}" : 'none';
+        $certRequest = null;
+
+        if ($decision['mode'] === 'use' && (int) $decision['certificate_id'] !== $currentCert && $mayReplace) {
+            $payload['certificate_id'] = (int) $decision['certificate_id'];
             if ($currentCert === 0) {
                 $payload += ['ssl_forced' => true, 'http2_support' => true];
             }
-            $changes[] = ['field' => 'certificate', 'from' => $currentCert > 0 ? "#{$currentCert}" : 'none', 'to' => "#{$cert}"];
+            $changes[] = ['field' => 'certificate', 'from' => $from, 'to' => $decision['why']];
+        } elseif ($decision['mode'] === 'request' && $mayReplace && ($currentCert === 0 || $broken)) {
+            $certRequest = $this->requestData($decision, $currentCert === 0);
+            $changes[] = ['field' => 'certificate', 'from' => $from, 'to' => $decision['why']];
         }
 
         $names = array_values((array) ($host['domain_names'] ?? []));
@@ -342,7 +380,9 @@ final class NpmSync
             $changes[] = ['field' => 'domain_names', 'from' => implode(', ', $names), 'to' => implode(', ', $payload['domain_names'])];
         }
 
-        $warnings = [];
+        // The decision's own notes (a missing certificate, a pin that does not exist), plus what is wrong with the certificate the host has now.
+        $warnings = in_array($decision['mode'], ['none', 'missing'], true) || ($decision['mode'] === 'use' && (int) $decision['certificate_id'] === $currentCert) ? $decision['warnings'] : [];
+        $warnings = array_values(array_unique([...$warnings, ...$problem]));
         if (count($names) > 1) {
             $warnings[] = 'This proxy host serves several names ('.implode(', ', $names).'); changes apply to all of them.';
         }
@@ -350,7 +390,7 @@ final class NpmSync
         return $this->finish($base + [
             'action' => $changes ? 'update' : 'unchanged',
             'changes' => $changes,
-            'data' => ['service_id' => $service->id, 'host_id' => $hostId, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload, 'modified_on' => $host['modified_on'] ?? null],
+            'data' => ['service_id' => $service->id, 'host_id' => $hostId, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload, 'modified_on' => $host['modified_on'] ?? null, 'cert_request' => $certRequest],
         ], $warnings);
     }
 
@@ -414,6 +454,123 @@ final class NpmSync
         }
 
         return $this->zone->scopeOf($domain) ?? 'local';
+    }
+
+    /**
+     * Where every host name of this zone stands on certificates: read-only, nothing is requested or changed.
+     * States: ok, expiring, expired, uncovered (the certificate does not cover the name), untrusted (an origin
+     * certificate on a directly served proxy), missing (none, but the policy wants one), none (none, by policy),
+     * unknown (a certificate id NPM does not list) and no_host (no proxy host yet).
+     *
+     * @return array{rows: list<array<string, mixed>>, counts: array<string, int>}
+     */
+    public function certificateReport(): array
+    {
+        $hosts = collect($this->client->proxyHosts());
+        $certs = collect($this->certificates() ?? [])->keyBy('id');
+        $rows = [];
+
+        $services = Zones::servicesIn($this->zone)->with('server')->where(fn ($q) => $q->whereNotNull('domain')->orWhereNotNull('public_domain'))->orderBy('name')->get();
+        foreach ($services as $service) {
+            foreach (['local' => $service->domain, 'public' => $service->public_domain] as $scope => $name) {
+                if (! filled($name)) {
+                    continue;
+                }
+                $domain = mb_strtolower($name);
+                $linked = $service->{$scope === 'public' ? 'npm_public_host_id' : 'npm_host_id'};
+                $host = $hosts->first(fn ($h) => $linked !== null && (int) $h['id'] === $linked)
+                    ?? $hosts->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true));
+                $row = ['service' => $service->name, 'domain' => $domain, 'state' => 'no_host', 'detail' => 'No proxy host yet.', 'certificate' => null];
+
+                if ($host !== null) {
+                    $id = (int) ($host['certificate_id'] ?? 0);
+                    if ($id === 0) {
+                        $d = $this->decide($service, $domain, $scope, false);
+                        $row['state'] = $d['mode'] === 'none' ? 'none' : 'missing';
+                        $row['detail'] = $d['mode'] === 'none' ? 'No certificate, as the policy says.' : 'No certificate. '.($d['mode'] === 'use' ? 'Covered by '.$d['why'].'.' : ($d['mode'] === 'request' ? 'The policy would request '.$d['why'].'.' : ($d['warnings'][0] ?? '')));
+                    } elseif (($cert = $certs->get($id)) === null) {
+                        $row['state'] = 'unknown';
+                        $row['detail'] = "The host uses certificate #{$id}, which NPM does not list.";
+                        $row['certificate'] = "#{$id}";
+                    } else {
+                        $row['certificate'] = Certificates::label($cert);
+                        $problems = $this->certificateProblems($cert, $domain);
+                        $row['state'] = match (true) {
+                            ! Certificates::coversHost($cert, $domain) => 'uncovered',
+                            Certificates::expired($cert) => 'expired',
+                            $this->untrusted($cert) => 'untrusted',
+                            Certificates::expiring($cert) => 'expiring',
+                            default => 'ok',
+                        };
+                        $row['detail'] = $problems ? implode(' ', $problems) : 'Covered until '.($cert['expires_on'] ? substr($cert['expires_on'], 0, 10) : 'an unknown date').'.';
+                    }
+                }
+
+                $rows[] = $row;
+            }
+        }
+
+        $counts = array_fill_keys(['ok', 'expiring', 'expired', 'uncovered', 'untrusted', 'missing', 'none', 'unknown', 'no_host'], 0);
+        foreach ($rows as $r) {
+            $counts[$r['state']]++;
+        }
+
+        return ['rows' => $rows, 'counts' => $counts];
+    }
+
+    /** @var list<array{id: int, name: string, domains: list<string>, expires_on: ?string, provider: string}>|null|false false = not read yet */
+    private array|null|false $certs = false;
+
+    /** NPM's certificates, read once per sync; null when the list cannot be read (the rest of the plan still works). */
+    private function certificates(): ?array
+    {
+        if ($this->certs === false) {
+            try {
+                $this->certs = $this->client->certificates();
+            } catch (NpmException) {
+                $this->certs = null;
+            }
+        }
+
+        return $this->certs;
+    }
+
+    /** Which certificate a host should have, from the service's own setting, the zone's pins and strategy, and what NPM holds. @return array<string, mixed> */
+    private function decide(Service $service, string $domain, string $scope, bool $auto): array
+    {
+        return CertificateChooser::choose($domain, $this->zone->certificatePolicy(), $this->certificates(), $service->cert_mode, $this->certFor($scope), $auto, $this->zone->domainNames());
+    }
+
+    /** @param array<string, mixed> $decision @return array{method: string, domains: list<string>, ssl: bool} */
+    private function requestData(array $decision, bool $ssl): array
+    {
+        return ['method' => $decision['method'], 'domains' => $decision['domains'], 'ssl' => $ssl];
+    }
+
+    private function untrusted(array $cert): bool
+    {
+        $policy = $this->zone->certificatePolicy();
+
+        return ! $policy->edgeManaged && in_array($cert['id'], $policy->originIds, true);
+    }
+
+    /** What is wrong with a certificate for this name. @return list<string> */
+    private function certificateProblems(array $cert, string $host): array
+    {
+        $w = [];
+        if (! Certificates::coversHost($cert, $host)) {
+            $w[] = Certificates::label($cert)." does not cover {$host} (it covers ".(implode(', ', $cert['domains']) ?: 'no names').').';
+        }
+        if (Certificates::expired($cert)) {
+            $w[] = Certificates::label($cert).' has expired.';
+        } elseif (Certificates::expiring($cert)) {
+            $w[] = Certificates::label($cert).' expires in '.Certificates::daysLeft($cert).' day(s).';
+        }
+        if ($this->untrusted($cert)) {
+            $w[] = Certificates::label($cert).' is marked as an origin certificate, which browsers do not trust on a proxy they connect to directly.';
+        }
+
+        return $w;
     }
 
     /**
