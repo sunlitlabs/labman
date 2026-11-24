@@ -110,6 +110,7 @@ class ZoneController extends Controller
             'cert_origin' => ['nullable', 'string', 'max:200'],
             'cert_email' => ['nullable', 'string', 'max:254'],
             'cert_dns_template' => ['nullable', 'integer', 'min:1'],
+            'dns_public_address' => ['nullable', 'string', 'max:253', Check::hostOrIp()],
             'mirror_from' => ['nullable', 'array'], 'mirror_from.*' => ['integer', 'exists:zones,id'],
             'mirror_upstream' => ['nullable', 'array'], 'mirror_upstream.*' => ['nullable', Rule::in(Mirrors::UPSTREAMS)],
         ]);
@@ -151,6 +152,7 @@ class ZoneController extends Controller
             'notes' => $v['notes'] ?? null,
             'certificate_policy' => $policy ?: null,
             'mirror_sources' => Mirrors::refs($sources) ?: null,
+            'dns' => array_filter(['split_horizon' => $request->boolean('dns_split_horizon') ?: null, 'public_address' => filled($v['dns_public_address'] ?? null) ? trim($v['dns_public_address']) : null], fn ($x) => $x !== null) ?: null,
         ];
 
         // The default zone's domains are the two lists on the Nginx Proxy Manager page; only other zones keep their own.

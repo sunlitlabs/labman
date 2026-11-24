@@ -256,6 +256,7 @@ final class YamlConfig
                 'domains' => $z->is_default ? null : (array_filter($z->domains()) ?: null),
                 'proxy_address' => $z->proxy_address,
                 'certificates' => $z->certificate_policy ?: null,
+                'dns' => $z->dns ?: null,
                 'mirrors' => \App\Npm\Mirrors::refs($z->mirror_sources) ? array_map(fn ($r) => ['zone' => Zone::query()->find($r['zone_id'])?->name, 'upstream' => $r['upstream']], \App\Npm\Mirrors::refs($z->mirror_sources)) : null,
                 'notes' => $z->notes,
             ], fn ($v) => $v !== null && $v !== ''))->values()->all();
@@ -501,6 +502,19 @@ final class YamlConfig
                         $errors[] = "{$who}: certificates: unknown key(s): ".implode(', ', array_map('strval', $unknownKeys));
                     }
                     $row['certificate_policy'] = $policy ?: null;
+                }
+            }
+
+            if (array_key_exists('dns', $item) && $item['dns'] !== null) {
+                $dns = $item['dns'];
+                if (! is_array($dns) || ($dns !== [] && array_is_list($dns)) || array_diff(array_keys($dns), ['split_horizon', 'public_address'])) {
+                    $errors[] = "{$who}: 'dns' must be a mapping with split_horizon and/or public_address";
+                } elseif (isset($dns['split_horizon']) && ! is_bool($dns['split_horizon'])) {
+                    $errors[] = "{$who}: dns.split_horizon must be true or false";
+                } elseif (isset($dns['public_address']) && (! is_string($dns['public_address']) || ! Hosts::isHostOrIp($dns['public_address']))) {
+                    $errors[] = "{$who}: dns.public_address must be an IP address or host name";
+                } else {
+                    $row['dns'] = array_filter(['split_horizon' => ($dns['split_horizon'] ?? false) ?: null, 'public_address' => $dns['public_address'] ?? null], fn ($x) => $x !== null) ?: null;
                 }
             }
 

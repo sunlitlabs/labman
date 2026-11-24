@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** A trust level that servers (and through them, services) belong to. */
 class Zone extends Model
 {
-    protected $fillable = ['name', 'level', 'color', 'icon', 'is_default', 'cidrs', 'domains', 'proxy_address', 'notes', 'certificate_policy', 'mirror_sources'];
+    protected $fillable = ['name', 'level', 'color', 'icon', 'is_default', 'cidrs', 'domains', 'proxy_address', 'notes', 'certificate_policy', 'mirror_sources', 'dns'];
 
     protected function casts(): array
     {
-        return ['level' => 'integer', 'is_default' => 'boolean', 'cidrs' => 'array', 'domains' => 'array', 'certificate_policy' => 'array', 'mirror_sources' => 'array'];
+        return ['level' => 'integer', 'is_default' => 'boolean', 'cidrs' => 'array', 'domains' => 'array', 'certificate_policy' => 'array', 'mirror_sources' => 'array', 'dns' => 'array'];
     }
 
     public function servers(): HasMany
@@ -42,6 +42,19 @@ class Zone extends Model
         $stored = is_array($this->domains) ? $this->domains : [];
 
         return ['local' => Domains::parse($stored['local'] ?? []), 'public' => Domains::parse($stored['public'] ?? [])];
+    }
+
+    /**
+     * How the zone's names are answered. Split-horizon: the inside resolver also answers this zone's public names, with
+     * its proxy. Public address: what the public provider points this zone's public names at (a CDN, a tunnel, a WAN address).
+     *
+     * @return array{split_horizon: bool, public_address: ?string}
+     */
+    public function dnsSettings(): array
+    {
+        $d = is_array($this->dns) ? $this->dns : [];
+
+        return ['split_horizon' => (bool) ($d['split_horizon'] ?? false), 'public_address' => filled($d['public_address'] ?? null) ? (string) $d['public_address'] : null];
     }
 
     /** How this zone's proxy gets certificates. */

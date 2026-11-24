@@ -12,7 +12,7 @@ use App\Models\User;
 final class AdminNav
 {
     /** Route-name patterns that belong to the admin panel (the main nav highlights "Admin" on any of them). */
-    public const ROUTES = ['admin.*', 'settings.*', 'users.*', 'inventory.*', 'semaphore.*', 'workbooks.*', 'npm.*', 'tokens.*', 'links.*', 'zones.*'];
+    public const ROUTES = ['admin.*', 'settings.*', 'users.*', 'inventory.*', 'semaphore.*', 'workbooks.*', 'npm.*', 'tokens.*', 'links.*', 'zones.*', 'dns.*'];
 
     /**
      * @return list<array{title: string, items: list<array{label: string, route: string, match: list<string>, status: ?bool, badge: int, hint: string}>}>
@@ -35,6 +35,7 @@ final class AdminNav
         if ($admin) {
             $site[] = self::item('Links', 'links.index', ['links.*'], 'Bookmarks for other web pages on the dashboard');
             $site[] = self::item('Zones', 'zones.index', ['zones.*'], 'Trust levels that servers belong to');
+            $site[] = self::item('DNS plan', 'dns.index', ['dns.*'], 'The DNS records the zones need');
             $sections[0]['items'] = $site;
 
             $sections[] = ['title' => 'Integrations', 'items' => [

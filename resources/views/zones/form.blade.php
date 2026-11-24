@@ -73,6 +73,20 @@
                 </div>
             </section>
 
+            @php($dns = $zone->dnsSettings())
+            <section class="formcard">
+                <h2>DNS</h2>
+                <p class="sub">Used by the <a href="{{ route('dns.index') }}">DNS plan</a> (LabMan lists the records; it does not write them).</p>
+                <div class="field">
+                    <label for="dns_public_address">Public address <span class="hint">optional; where the public DNS provider points this zone's public names (a CDN, tunnel or WAN address)</span></label>
+                    <input id="dns_public_address" name="dns_public_address" type="text" maxlength="253" placeholder="203.0.113.10" value="{{ old('dns_public_address', $dns['public_address']) }}">
+                </div>
+                <label class="check">
+                    <input type="checkbox" name="dns_split_horizon" value="1" @checked(old('dns_split_horizon', $dns['split_horizon']))>
+                    <span>Also answer this zone's public names on the inside resolver, with its proxy <span class="hint">(split-horizon: people inside reach the proxy directly instead of going out and back)</span></span>
+                </label>
+            </section>
+
             @php($others = \App\Support\Zones::all()->reject(fn ($z) => $z->id === $zone->id))
             @if ($others->isNotEmpty())
                 @php($sources = \App\Npm\Mirrors::sourcesOf($zone))

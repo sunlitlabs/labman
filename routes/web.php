@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\DnsController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\IconController;
 use App\Http\Controllers\InventoryController;
@@ -98,6 +99,10 @@ Route::middleware('admin')->group(function () {
     Route::post('/npm/import', [NpmController::class, 'importApply'])->name('npm.import.apply');
     Route::get('/npm/push', [NpmController::class, 'pushPreview'])->name('npm.push');
     Route::post('/npm/push', [NpmController::class, 'pushApply'])->name('npm.push.apply');
+    Route::get('/dns', [DnsController::class, 'index'])->name('dns.index');
+    Route::get('/dns/export', [DnsController::class, 'export'])->name('dns.export');
+    Route::post('/dns/owner', [DnsController::class, 'owner'])->name('dns.owner');
+    Route::post('/dns/propose', [DnsController::class, 'propose'])->name('dns.propose');
     Route::get('/npm/mirrors', [MirrorController::class, 'index'])->name('npm.mirrors');
     Route::delete('/npm/mirrors/{mirror}', [MirrorController::class, 'forget'])->name('npm.mirrors.forget');
     Route::get('/npm/all', [NpmController::class, 'allPreview'])->name('npm.all');

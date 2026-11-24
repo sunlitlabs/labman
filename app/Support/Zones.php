@@ -83,6 +83,7 @@ final class Zones
     {
         $host = mb_strtolower(rtrim(trim($host), '.'));
         $best = -1;
+        $bestDomain = null;
         $found = [];
 
         foreach ($zones ?? self::all() as $zone) {
@@ -91,12 +92,21 @@ final class Zones
                     $length = strlen($domain);
                     if ($length > $best) {
                         $best = $length;
+                        $bestDomain = $domain;
                         $found = [];
                     }
                     if ($length === $best && ! in_array($zone, $found, true)) {
                         $found[] = $zone;
                     }
                 }
+            }
+        }
+
+        // Two zones listing the very same domain: the owner the admin picked (see DnsOwners) settles it.
+        if (count($found) > 1 && $bestDomain !== null && ($pick = \App\Dns\DnsOwners::domainOwner($bestDomain)) !== null) {
+            $picked = array_values(array_filter($found, fn ($z) => $z->id === $pick));
+            if ($picked !== []) {
+                return $picked;
             }
         }
 
