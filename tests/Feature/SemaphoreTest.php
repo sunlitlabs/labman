@@ -322,6 +322,24 @@ class SemaphoreTest extends TestCase
         $this->assertSame([], $this->sem->posts(), 'nothing was sent to Semaphore');
     }
 
+    public function test_a_required_which_hosts_variable_is_filled_from_the_ticked_servers(): void
+    {
+        $this->connect();
+        $this->sem->templates[0]['survey_vars'][] = ['name' => 'target_hosts', 'title' => 'Target Hosts', 'description' => 'Name machines, or groups, with commas', 'type' => '', 'required' => true];
+
+        // The form does not demand it a second time.
+        $page = $this->actingAs($this->admin)->get('/semaphore/run?project=1&template=7')->assertOk()->assertSee('filled in from the servers and groups you tick above')->getContent();
+        $this->assertDoesNotMatchRegularExpression('/name="survey\[target_hosts\]"[^>]*\brequired\b/', $page);
+
+        $base = ['project_id' => 1, 'template_id' => 7];
+        $this->post('/semaphore/run/confirm', $base + ['hosts' => ['web1'], 'groups' => ['web'], 'survey' => ['target_hosts' => '']])
+            ->assertOk()->assertSee('&quot;target_hosts&quot;:&quot;web,web1&quot;', false);
+
+        // Nothing ticked and nothing typed: a clear instruction, not a bare "needs the variable".
+        $this->post('/semaphore/run/confirm', $base + ['survey' => ['target_hosts' => '']])->assertSessionHasErrors('semaphore');
+        $this->assertStringContainsString('Tick the servers or groups', session('errors')->first('semaphore'));
+    }
+
     public function test_required_variables_must_be_given(): void
     {
         $this->connect();

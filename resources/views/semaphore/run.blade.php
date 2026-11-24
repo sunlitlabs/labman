@@ -71,9 +71,11 @@
                 <label class="check"><input type="checkbox" name="diff" value="1" @checked($old['diff'] ?? false)> Show diffs of changed files</label>
                 @foreach ($survey as $var)
                     @continue($var['type'] === 'secret')
+                    @php($isTarget = $var['type'] === 'string' && \App\Semaphore\SurveyVars::isTarget($var['name']))
+                    @php($var['required'] = $var['required'] && ! $isTarget)
                     <div class="field">
                         <label for="survey-{{ $var['name'] }}">{{ $var['title'] }}
-                            <span class="hint">{{ $var['name'] }}@if ($var['required']), required @endif @if ($var['description']) · {{ $var['description'] }} @endif</span></label>
+                            <span class="hint">{{ $var['name'] }}@if ($var['required']), required @endif @if ($isTarget) · filled in from the servers and groups you tick above; type here only to override @elseif ($var['description']) · {{ $var['description'] }} @endif</span></label>
                         @if ($var['type'] === 'enum')
                             <select id="survey-{{ $var['name'] }}" name="survey[{{ $var['name'] }}]" @required($var['required'])>
                                 <option value="">{{ $var['required'] ? '— choose —' : '— not set —' }}</option>

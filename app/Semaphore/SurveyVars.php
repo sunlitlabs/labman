@@ -43,6 +43,18 @@ final class SurveyVars
     }
 
     /**
+     * Is this a variable a playbook uses to learn which machines to run on (target_hosts, hosts, limit…)?
+     * LabMan fills it from the servers and groups picked on the run form, so it is never asked twice.
+     */
+    public static function isTarget(string $name): bool
+    {
+        $name = strtolower($name);
+
+        return in_array($name, ['target', 'targets', 'host', 'hosts', 'limit', 'run_on'], true)
+            || (bool) preg_match('/^(target|host|hosts|limit)_/', $name);
+    }
+
+    /**
      * Check and type a run's extra variables against the template's declarations.
      *
      * @param  array<string, mixed>  $options  validated RunOptions
@@ -74,6 +86,10 @@ final class SurveyVars
 
         foreach ($declared as $name => $def) {
             if ($def['required'] && $def['type'] !== 'secret' && ! array_key_exists($name, $typed)) {
+                if (self::isTarget($name)) {
+                    throw new SemaphoreException("This template needs to know where to run ('{$name}'). Tick the servers or groups to run it on.");
+                }
+
                 throw new SemaphoreException("The template needs the variable '{$name}' ({$def['title']}).");
             }
         }

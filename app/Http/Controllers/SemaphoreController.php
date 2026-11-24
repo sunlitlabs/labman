@@ -281,6 +281,14 @@ class SemaphoreController extends Controller
             ? (string) $request->input('limit')
             : implode(',', array_filter([...(array) $request->input('groups', []), ...(array) $request->input('hosts', []), (string) $request->input('limit_extra', '')]));
 
+        // A "which hosts" survey variable is answered by the targets picked above, unless typed in by hand.
+        $survey = (array) $request->input('survey', []);
+        foreach ($survey as $name => $value) {
+            if ($limit !== '' && SurveyVars::isTarget((string) $name) && (! is_scalar($value) || trim((string) $value) === '')) {
+                $survey[$name] = $limit;
+            }
+        }
+
         return [
             'project_id' => $request->input('project_id'),
             'template_id' => $request->input('template_id'),
@@ -288,7 +296,7 @@ class SemaphoreController extends Controller
             'dry_run' => $request->boolean('dry_run'),
             'diff' => $request->boolean('diff'),
             'extra_vars' => $request->input('extra_vars'),
-            'survey' => (array) $request->input('survey', []),
+            'survey' => $survey,
             'message' => $request->input('message', ''),
         ];
     }
