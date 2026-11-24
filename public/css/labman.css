@@ -500,3 +500,21 @@ details.formcard > summary { cursor: pointer; font-weight: 600; }
 
 .tile-ip { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-ip:hover, a.tile-sub:hover { color: var(--accent); }
+
+/* ---- progress and results of slow checks ---- */
+a.is-busy { opacity: 0.6; pointer-events: none; cursor: progress; }
+.progress-panel { margin: 12px 0; }
+.progress-head { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.spinner { width: 1.1em; height: 1.1em; flex: none; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+.progress-steps { margin: 0; padding-left: 1.4em; color: var(--muted); }
+.progress-steps li.active { color: var(--fg); font-weight: 600; }
+.progress-steps li.done { color: var(--up); }
+.progress-steps li.done::marker { content: "\2713  "; }
+.check-result { margin: 12px 0 16px; }
+.check-result.inv-ok { font-weight: 400; }
+.check-line { margin: 0 0 8px; overflow-wrap: anywhere; }
+.steps-done { margin: 0 0 8px; padding-left: 1.2em; font-size: 0.9rem; color: var(--muted); overflow-wrap: anywhere; }
+.check-verdict { margin: 0; font-weight: 600; }
+.check-failed { border-color: var(--down); }

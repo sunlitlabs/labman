@@ -69,6 +69,7 @@ final class RepoConfig
     {
         Secrets::forget([...array_values(self::PLAIN), self::TOKEN]);
         SyncStatus::forget();
+        CheckStatus::forget();
     }
 
     // ---------------------------------------------------------- validation

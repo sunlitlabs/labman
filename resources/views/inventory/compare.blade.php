@@ -19,7 +19,7 @@
 @section('admin')
     <div class="toolbar">
         <h1>Compare LabMan and the inventory</h1>
-        <a class="btn" href="{{ route('inventory.compare') }}">Pull latest and compare again</a>
+        <a class="btn" href="{{ route('inventory.compare') }}" data-progress="{{ json_encode(\App\Inventory\CheckStatus::steps($plan['path'], $plan['server_count'])) }}">Pull latest and compare again</a>
         <a class="btn" href="{{ route('inventory.index') }}">Connection</a>
     </div>
     <p class="muted">
@@ -50,11 +50,26 @@
 
     @include('inventory.status', ['last' => $last])
 
-    @if ($total === 0)
-        <div class="card empty">Neither LabMan nor the inventory has any servers yet.</div>
-    @elseif ($needsWork === 0)
-        <div class="card inv-ok">Everything lines up: all {{ count($plan['in_sync']) }} server(s) match the inventory.</div>
-    @endif
+    {{-- Always say what was done and found, including when nothing differs. --}}
+    @php($checked = \Illuminate\Support\Carbon::parse($plan['checked_at']))
+    <div class="card check-result {{ $needsWork === 0 ? 'inv-ok' : '' }}" role="status">
+        <p class="check-line">
+            <strong>Checked commit <span class="mono">{{ substr($plan['head'], 0, 7) }}</span> on <span class="mono">{{ $plan['branch'] }}</span> at <time datetime="{{ $checked->toIso8601String() }}" title="{{ $checked->toDayDateTimeString() }}">{{ $checked->format('H:i') }}</time>:</strong>
+            {{ \App\Inventory\CheckStatus::counts(['in_sync' => count($plan['in_sync']), 'differ' => count($plan['differences']), 'only_labman' => count($plan['only_labman']), 'only_inventory' => count($plan['only_inventory'])]) }}.
+        </p>
+        <ul class="steps-done">
+            <li>Connected to the repository and pulled the latest commit</li>
+            <li>Read <span class="mono">{{ $plan['path'] }}</span> ({{ $plan['host_count'] }} {{ $plan['host_count'] === 1 ? 'host' : 'hosts' }})</li>
+            <li>Compared {{ $plan['host_count'] }} {{ $plan['host_count'] === 1 ? 'host' : 'hosts' }} with {{ $plan['server_count'] }} {{ $plan['server_count'] === 1 ? 'server' : 'servers' }}</li>
+        </ul>
+        @if ($total === 0)
+            <p class="check-verdict">Neither LabMan nor the inventory has any servers yet.</p>
+        @elseif ($needsWork === 0)
+            <p class="check-verdict">Everything lines up: all {{ count($plan['in_sync']) }} server(s) match the inventory. Nothing to do.</p>
+        @else
+            <p class="check-verdict">{{ $needsWork }} {{ $needsWork === 1 ? 'item needs' : 'items need' }} a decision below.</p>
+        @endif
+    </div>
 
     <form id="choices-form" method="POST" action="{{ route('inventory.review') }}">
         @csrf

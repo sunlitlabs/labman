@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Inventory\CheckStatus;
 use App\Inventory\ChoiceForm;
 use App\Inventory\Connector;
 use App\Inventory\InventoryException;
@@ -19,7 +20,7 @@ class InventoryController extends Controller
 {
     public function index()
     {
-        return view('inventory.index', ['connection' => RepoConfig::summary(), 'last' => SyncStatus::last()]);
+        return view('inventory.index', ['connection' => RepoConfig::summary(), 'last' => SyncStatus::last(), 'check' => CheckStatus::last()]);
     }
 
     public function connect(Request $request): RedirectResponse
@@ -71,8 +72,15 @@ class InventoryController extends Controller
         try {
             $plan = InventorySync::fromStored()->compare();
         } catch (InventoryException $e) {
-            return redirect()->route('inventory.index')->withErrors(['inventory' => $e->getMessage()]);
+            // State it on the next page and keep it, so a failed check is never silent.
+            if ($config = RepoConfig::get()) {
+                CheckStatus::failed($e->getMessage(), $config['branch'], $config['path']);
+            }
+
+            return redirect()->route('inventory.index')->withErrors(['inventory' => 'The check failed: '.$e->getMessage()]);
         }
+
+        CheckStatus::succeeded($plan, $plan['server_count']);
 
         return view('inventory.compare', ['plan' => $plan, 'old' => session()->getOldInput(), 'last' => SyncStatus::last()]);
     }

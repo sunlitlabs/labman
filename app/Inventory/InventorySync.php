@@ -102,6 +102,8 @@ final class InventorySync
             'format' => $inventory->format,
             'convert' => $convert,
             'host_count' => count($hosts),
+            'server_count' => $servers->count(),
+            'checked_at' => now()->toIso8601String(),
             'in_sync' => $inSync,
             'differences' => $differences,
             'only_labman' => $onlyLabman,

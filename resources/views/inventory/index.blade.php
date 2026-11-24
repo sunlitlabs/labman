@@ -20,7 +20,7 @@
                 <span class="pill pill-{{ \App\Inventory\Inventory::formatFor($connection['path']) === 'yaml' ? 'up' : 'degraded' }}">{{ strtoupper(\App\Inventory\Inventory::formatFor($connection['path'])) }}</span>
             </p>
             <div class="actions">
-                <a class="btn btn-primary" href="{{ route('inventory.compare') }}">Compare now</a>
+                <a class="btn btn-primary" href="{{ route('inventory.compare') }}" data-progress="{{ json_encode(\App\Inventory\CheckStatus::steps($connection['path'], \App\Models\Server::count())) }}">Compare now</a>
                 <form method="POST" action="{{ route('inventory.disconnect') }}">
                     @csrf @method('DELETE')
                     <button class="btn-danger" type="submit" data-confirm>Disconnect</button>
@@ -33,7 +33,7 @@
         </div>
     @endif
 
-    @if ($connection) @include('inventory.status', ['last' => $last]) @endif
+    @if ($connection) @include('inventory.check', ['check' => $check]) @include('inventory.status', ['last' => $last]) @endif
 
     @php($open = $connection || $errors->hasAny(['path', 'branch', 'username']) || old('path') || old('branch'))
     <form class="formcard" method="POST" action="{{ route('inventory.connect') }}" id="connect-form" data-parse-url="{{ route('inventory.parse') }}">

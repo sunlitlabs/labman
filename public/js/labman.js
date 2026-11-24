@@ -78,6 +78,66 @@
     window.setTimeout(function () { btn.disabled = true; }, 0);
   });
 
+  // A link that starts a slow check (pull and compare, an NPM preview) shows a spinner and the steps it is
+  // working through until the next page arrives. The steps advance on a timer: the server answers with the
+  // whole page at once, and the page that follows states what was actually found.
+  var progressTimer = null;
+  function clearProgress() {
+    if (progressTimer) { window.clearInterval(progressTimer); progressTimer = null; }
+    document.querySelectorAll('.progress-panel').forEach(function (p) { p.remove(); });
+    document.querySelectorAll('a[data-progress].is-busy').forEach(function (a) { a.classList.remove('is-busy'); a.removeAttribute('aria-disabled'); });
+  }
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest && e.target.closest('a[data-progress]');
+    if (!link) return;
+    if (link.classList.contains('is-busy')) { e.preventDefault(); return; }
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var steps;
+    try { steps = JSON.parse(link.getAttribute('data-progress')); } catch (err) { steps = null; }
+    if (!Array.isArray(steps) || steps.length === 0) steps = ['Working'];
+
+    clearProgress();
+    link.classList.add('is-busy');
+    link.setAttribute('aria-disabled', 'true');
+
+    var panel = document.createElement('div');
+    panel.className = 'card progress-panel';
+    panel.setAttribute('role', 'status');
+    var head = document.createElement('p');
+    head.className = 'progress-head';
+    var spin = document.createElement('span');
+    spin.className = 'spinner';
+    spin.setAttribute('aria-hidden', 'true');
+    var title = document.createElement('strong');
+    title.textContent = 'Working…';
+    head.appendChild(spin);
+    head.appendChild(title);
+    var list = document.createElement('ol');
+    list.className = 'progress-steps';
+    var items = steps.map(function (text) {
+      var li = document.createElement('li');
+      li.textContent = String(text);
+      list.appendChild(li);
+      return li;
+    });
+    panel.appendChild(head);
+    panel.appendChild(list);
+    var anchor = link.closest('.toolbar, .actions') || link;
+    anchor.parentNode.insertBefore(panel, anchor.nextSibling);
+
+    var at = 0;
+    var show = function () {
+      items.forEach(function (li, i) { li.className = i < at ? 'done' : (i === at ? 'active' : ''); });
+      title.textContent = steps[at] + '…';
+    };
+    show();
+    progressTimer = window.setInterval(function () {
+      if (at < items.length - 1) { at += 1; show(); }
+    }, 1200);
+  });
+  // Coming back with the browser's back button must not leave a stale spinner.
+  window.addEventListener('pageshow', function (e) { if (e.persisted) clearProgress(); });
+
   // Filter the group / server pickers on the run form.
   document.querySelectorAll('[data-filter-targets]').forEach(function (input) {
     input.addEventListener('input', function () {

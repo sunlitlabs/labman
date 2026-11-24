@@ -178,6 +178,43 @@ class InventoryUiTest extends TestCase
         $this->get('/inventory/compare')->assertOk()->assertSee('Everything lines up')->assertDontSee('Only in LabMan');
     }
 
+    public function test_a_clean_compare_still_states_exactly_what_was_checked(): void
+    {
+        $this->connect();
+        Server::create(['name' => 'web1', 'address' => '192.0.2.11', 'group' => 'web']);
+        Server::create(['name' => 'db1', 'address' => '192.0.2.21', 'group' => 'db']);
+        Server::create(['name' => 'web2.example.com', 'address' => 'web2.example.com', 'group' => 'web']);
+
+        $page = $this->get('/inventory/compare')->assertOk()
+            ->assertSee('Checked commit')->assertSee('3 in sync, 0 differences')
+            ->assertSee('Compared 3 hosts with 3 servers')->assertSee('Nothing to do')
+            ->assertSee('data-progress=', false)->assertSee('Pulling the latest commit');
+
+        $head = substr($this->remote->remoteHead(), 0, 7);
+        $page->assertSee($head);
+
+        // The same sentence is kept for the connection page.
+        $this->get('/inventory')->assertOk()->assertSee('Last check')->assertSee('3 in sync, 0 differences')->assertSee('data-progress=', false);
+    }
+
+    public function test_a_failed_compare_says_why_and_is_remembered(): void
+    {
+        $this->connect();
+        RepoConfig::setPath('inventory/missing.yml');
+
+        $this->get('/inventory/compare')->assertRedirect(route('inventory.index'))->assertSessionHasErrors('inventory');
+
+        $page = $this->followingRedirects()->get('/inventory/compare')->assertOk();
+        $page->assertSee('The check failed')->assertSee('inventory/missing.yml')->assertSee('Last check')->assertSee('failed');
+    }
+
+    public function test_the_check_sentence_counts_each_kind_of_difference(): void
+    {
+        $sentence = \App\Inventory\CheckStatus::sentence(['head' => 'abcdef0123', 'branch' => 'main', 'in_sync' => 11, 'differ' => 1, 'only_labman' => 2, 'only_inventory' => 0]);
+
+        $this->assertSame('Checked commit abcdef0 on main: 11 in sync, 1 difference, 2 only in LabMan.', $sentence);
+    }
+
     public function test_hostile_names_in_the_inventory_are_escaped(): void
     {
         $this->remote->commitFromElsewhere(['inventory/hosts.yml' => "all:\n  hosts:\n    '<script>alert(1)</script>':\n"], 'evil');

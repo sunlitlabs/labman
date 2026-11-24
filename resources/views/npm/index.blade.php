@@ -31,9 +31,9 @@
                 @unless ($connection['verify_tls']) <span class="muted">(TLS certificate not verified)</span> @endunless
             </p>
             <div class="actions">
-                <a class="btn btn-primary" href="{{ route('npm.wizard') }}">Match everything up (guided)</a>
-                <a class="btn" href="{{ route('npm.import') }}">Preview import (NPM → LabMan)</a>
-                <a class="btn" href="{{ route('npm.push') }}">Preview push (LabMan → NPM)</a>
+                <a class="btn btn-primary" href="{{ route('npm.wizard') }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts and certificates","Matching them with your services and servers"]'>Match everything up (guided)</a>
+                <a class="btn" href="{{ route('npm.import') }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts","Working out what would change in LabMan"]'>Preview import (NPM → LabMan)</a>
+                <a class="btn" href="{{ route('npm.push') }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts","Working out what would change in Nginx Proxy Manager"]'>Preview push (LabMan → NPM)</a>
                 <a class="btn" href="{{ $connection['url'] }}" target="_blank" rel="noopener noreferrer">Open NPM</a>
                 <form method="POST" action="{{ route('npm.disconnect') }}">
                     @csrf @method('DELETE')
