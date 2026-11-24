@@ -52,3 +52,15 @@ services:
     group: Network
     monitor: false       # hide its status ("not monitored"); it is still listed
     public_check: false
+
+# Optional: more than one trust zone. Without a `zones:` list everything is in the one Default zone.
+# zones:
+#   - name: Internal
+#     level: 60                        # 0-100, higher = more trusted (advisory)
+#     default: true                    # where servers go when no zone is named; its domains are settings.local_domains / public_domains
+#   - name: External
+#     level: 10
+#     cidrs: [198.51.100.0/24]         # suggests this zone for a new server with such an address
+#     domains: {public: [example.dev]}
+#     proxy_address: 192.0.2.5         # what other zones' proxies forward to
+# and on a server (or, rarely, a service):  zone: External

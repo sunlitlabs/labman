@@ -4,19 +4,33 @@ namespace App\Models;
 
 use App\Support\Settings;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Server extends Model
 {
     protected $fillable = [
         'name', 'address', 'domain', 'group', 'ports', 'ssh_user', 'ssh_port', 'notes', 'inventory_host',
-        'monitor', 'check_ssh', 'icon', 'extra_domains',
+        'monitor', 'check_ssh', 'icon', 'extra_domains', 'zone_id',
     ];
 
     protected $attributes = [
         'monitor' => true,
         'check_ssh' => true,
     ];
+
+    protected static function booted(): void
+    {
+        // Every server is in a zone; one that is not placed explicitly goes to the default zone.
+        static::creating(function (Server $server) {
+            $server->zone_id ??= \App\Support\Zones::defaultId();
+        });
+    }
+
+    public function zone(): BelongsTo
+    {
+        return $this->belongsTo(Zone::class);
+    }
 
     protected function casts(): array
     {

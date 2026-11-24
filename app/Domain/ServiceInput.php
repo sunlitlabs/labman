@@ -94,6 +94,8 @@ final class ServiceInput
             'icon' => ['nullable', 'string', 'max:80', Check::icon()],
             'update_project' => ['nullable', 'integer', 'min:1'],
             'update_template' => ['nullable', 'integer', 'min:1', 'required_with:update_project'],
+            // Only to override the zone of the service's server; empty means "same as the server".
+            'zone_id' => ['nullable', 'integer', 'exists:zones,id'],
         ];
     }
 
@@ -117,6 +119,9 @@ final class ServiceInput
         $validated['health_path'] = filled($validated['health_path'] ?? null) ? $validated['health_path'] : null;
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
         $validated['public_domain'] = filled($validated['public_domain'] ?? null) ? strtolower($validated['public_domain']) : null;
+        if (array_key_exists('zone_id', $validated)) {
+            $validated['zone_id'] = filled($validated['zone_id']) ? (int) $validated['zone_id'] : null;
+        }
         $validated['extra_domains'] = Domains::cleanExtras($validated['extra_domains'] ?? null, [$validated['domain'] ?? null, $validated['public_domain']]);
 
         return $validated;
@@ -172,6 +177,7 @@ final class ServiceInput
             'icon' => $service->icon,
             'update_project' => $service->update_project,
             'update_template' => $service->update_template,
+            'zone_id' => $service->zone_id,
         ];
     }
 }

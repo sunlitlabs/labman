@@ -26,6 +26,16 @@
                         <label for="address">Address <span class="hint">IP or host name that is checked</span></label>
                         <input id="address" name="address" type="text" required maxlength="253" placeholder="192.0.2.10" value="{{ old('address', $server->address) }}">
                     </div>
+                    @if (\App\Support\Zones::multiple())
+                        <div class="field">
+                            <label for="zone_id">Zone <span class="hint">its trust level</span></label>
+                            <select id="zone_id" name="zone_id">
+                                @foreach (\App\Support\Zones::all() as $z)
+                                    <option value="{{ $z->id }}" @selected((string) old('zone_id', $server->zone_id ?? \App\Support\Zones::defaultId()) === (string) $z->id)>{{ $z->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                     @php($names = \App\Support\Domains::namesOf($server))
                     @php($localDefault = \App\Support\Domains::defaultFor('local'))
                     <div class="field">

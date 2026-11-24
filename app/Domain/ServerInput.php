@@ -70,6 +70,7 @@ final class ServerInput
             'monitor' => ['boolean'],
             'check_ssh' => ['boolean'],
             'icon' => ['nullable', 'string', 'max:80', Check::icon()],
+            'zone_id' => ['nullable', 'integer', 'exists:zones,id'],
         ];
     }
 
@@ -79,6 +80,10 @@ final class ServerInput
         $validated['ports'] = array_values(array_unique(array_map('intval', $validated['ports'] ?? [])));
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
         $validated['extra_domains'] = Domains::cleanExtras($validated['extra_domains'] ?? null, [$validated['domain'] ?? null]);
+        // A server always has a zone: blank keeps the current one (or the default for a new server).
+        if (blank($validated['zone_id'] ?? null)) {
+            unset($validated['zone_id']);
+        }
 
         return $validated;
     }
@@ -112,6 +117,7 @@ final class ServerInput
             'monitor' => $server->monitor,
             'check_ssh' => $server->check_ssh,
             'icon' => $server->icon,
+            'zone_id' => $server->zone_id,
         ];
     }
 }

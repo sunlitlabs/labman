@@ -18,6 +18,7 @@ use App\Http\Controllers\StatusController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkbookController;
+use App\Http\Controllers\ZoneController;
 use Illuminate\Support\Facades\Route;
 
 // First-run wizard (the RedirectToSetup middleware gates it).
@@ -56,6 +57,7 @@ Route::middleware('admin')->group(function () {
     Route::resource('services', ServiceController::class)->except(['index', 'show']);
     Route::resource('servers', ServerController::class)->except(['index', 'show']);
     Route::resource('links', LinkController::class)->except(['show']);
+    Route::resource('zones', ZoneController::class)->except(['show']);
     Route::resource('users', UserController::class)->except(['index', 'show', 'destroy']);
     Route::post('/users/{user}/approve', [UserController::class, 'approve'])->name('users.approve');
 

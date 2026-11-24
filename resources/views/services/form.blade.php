@@ -54,6 +54,17 @@
                             @endforeach
                         </select>
                     </div>
+                    @if (\App\Support\Zones::multiple())
+                        <div class="field">
+                            <label for="zone_id">Zone <span class="hint">normally the server's zone</span></label>
+                            <select id="zone_id" name="zone_id">
+                                <option value="">same as the server</option>
+                                @foreach (\App\Support\Zones::all() as $z)
+                                    <option value="{{ $z->id }}" @selected((string) old('zone_id', $service->zone_id) === (string) $z->id)>{{ $z->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                     <div class="field">
                         <label for="address">Its own address</label>
                         <input id="address" name="address" type="text" maxlength="253" placeholder="192.0.2.1" value="{{ old('address', $service->address) }}">

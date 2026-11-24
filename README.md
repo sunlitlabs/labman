@@ -202,6 +202,8 @@ Limits: one inventory file; LabMan creates groups for LabMan groups (named like 
 
 **Links.** For pages that are not services or servers (a network controller, a cloud dashboard), use **Add link** on the dashboard or **Admin > Links**. A link has a name, an http(s) address, an optional group, notes and icon; it appears as a tile on the dashboard, opens in a new tab and is never health-checked.
 
+**Zones.** A zone is a trust level that servers belong to (for example management, internal, LAN, external); higher levels are more trusted, and LabMan only ever uses the level to warn. Every install has one **Default** zone holding everything, and with one zone nothing else in LabMan changes. Add more under **Admin > Zones**: each zone has a level, optional network blocks (to suggest a zone for a new server from its address), optional domains, and the address other zones forward to. Once there are two zones, the server form gets a Zone field and the service form an optional override (a service normally follows its server). Zones are in the YAML export and import (`zones:`, and `zone: <name>` on a server or service); a file without zones still imports. A name belongs to the zone with the longest matching domain (so `*.a.example.dev` beats `*.example.dev`).
+
 **Host list.** Under **Admin > Semaphore** choose the Semaphore inventory that holds your machines (a static one, kept inside Semaphore; an inventory that points at a git file is handled by the Inventory page above). Then:
 
 - The Servers page shows, per server, the host name Semaphore knows it by, or "Not in Semaphore", and the run form flags servers Semaphore does not have.

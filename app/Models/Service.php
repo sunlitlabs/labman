@@ -13,7 +13,7 @@ class Service extends Model
     protected $fillable = [
         'name', 'domain', 'server_id', 'address', 'port', 'scheme', 'path', 'group',
         'expect', 'verify_tls', 'public_check', 'websockets', 'notes', 'npm_host_id', 'update_project', 'update_template',
-        'health_path', 'monitor', 'check_tcp', 'icon', 'public_domain', 'npm_public_host_id', 'extra_domains',
+        'health_path', 'monitor', 'check_tcp', 'icon', 'public_domain', 'npm_public_host_id', 'extra_domains', 'zone_id',
     ];
 
     /** Defaults for new models (the database defaults are older than the current ones). */
@@ -41,6 +41,12 @@ class Service extends Model
     public function server(): BelongsTo
     {
         return $this->belongsTo(Server::class);
+    }
+
+    /** Only set when the service differs from its server's zone; see App\Support\Zones::of() for the effective zone. */
+    public function zone(): BelongsTo
+    {
+        return $this->belongsTo(Zone::class);
     }
 
     /** The host the backend check connects to: the linked server's address, else our own. */

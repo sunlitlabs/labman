@@ -4,11 +4,13 @@ namespace App\Config;
 
 use App\Models\Server;
 use App\Models\Service;
+use App\Models\Zone;
 use App\Support\DomainSuggestions;
 use App\Support\Domains;
 use App\Support\ExpectRange;
 use App\Support\Hosts;
 use App\Support\Settings;
+use App\Support\Zones;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Symfony\Component\Yaml\Exception\ParseException;
@@ -41,20 +43,31 @@ final class YamlConfig
 
         $errors = [];
 
-        $unknown = array_values(array_diff(array_keys($data), ['settings', 'servers', 'services']));
+        $unknown = array_values(array_diff(array_keys($data), ['settings', 'zones', 'servers', 'services']));
         if ($unknown) {
             $errors[] = 'unknown top-level key(s): '.implode(', ', array_map('strval', $unknown));
         }
 
         $settings = self::settings($data['settings'] ?? null, $errors);
+        $zones = self::zones($data['zones'] ?? null, $errors);
         $servers = self::servers($data['servers'], $errors);
         $services = self::services($data['services'], array_column($servers, 'name'), $errors);
+
+        // A zone named on a server or service must be defined in the file or already exist.
+        $known = array_map('mb_strtolower', [...array_column($zones, 'name'), ...Zone::query()->pluck('name')->all()]);
+        foreach (['servers' => $servers, 'services' => $services] as $kind => $rows) {
+            foreach ($rows as $row) {
+                if (isset($row['zone']) && ! in_array(mb_strtolower($row['zone']), $known, true)) {
+                    $errors[] = rtrim($kind, 's')." '{$row['name']}': zone '{$row['zone']}' is not defined under 'zones' and does not exist yet";
+                }
+            }
+        }
 
         if ($errors) {
             throw new ConfigException($errors);
         }
 
-        return ['settings' => $settings, 'servers' => $servers, 'services' => $services];
+        return ['settings' => $settings, 'zones' => $zones, 'servers' => $servers, 'services' => $services];
     }
 
     /**
@@ -72,9 +85,20 @@ final class YamlConfig
                 Settings::set($config['settings']);
             }
 
+            foreach ($config['zones'] ?? [] as $row) {
+                self::importZone($row);
+            }
+            $zoneIds = Zone::query()->pluck('id', 'name')->mapWithKeys(fn ($id, $name) => [mb_strtolower($name) => $id])->all();
+
             foreach ($config['servers'] as $row) {
+                $zone = $row['zone'] ?? null;
+                unset($row['zone']);
                 $server = Server::query()->where('name', $row['name'])->first() ?? new Server;
-                $server->fill($row)->save();
+                $server->fill($row);
+                if ($zone !== null) {
+                    $server->zone_id = $zoneIds[mb_strtolower($zone)];
+                }
+                $server->save();
             }
 
             $ids = Server::query()->pluck('id', 'name');
@@ -83,9 +107,15 @@ final class YamlConfig
                 $serverName = $row['server'];
                 unset($row['server']);
                 $row['server_id'] = $serverName !== null ? ($ids[$serverName] ?? null) : null;
+                $zone = $row['zone'] ?? null;
+                unset($row['zone']);
 
                 $service = Service::query()->where('name', $row['name'])->first() ?? new Service;
-                $service->fill($row)->save();
+                $service->fill($row);
+                if ($zone !== null) {
+                    $service->zone_id = $zoneIds[mb_strtolower($zone)];
+                }
+                $service->save();
             }
 
             if ($replace) {
@@ -94,7 +124,37 @@ final class YamlConfig
             }
         });
 
-        return ['servers' => count($config['servers']), 'services' => count($config['services']), 'removed' => $removed];
+        // "zones" is only reported when the file had some, so the result for a file without zones is unchanged.
+        $zones = count($config['zones'] ?? []);
+
+        return ['servers' => count($config['servers']), 'services' => count($config['services']), 'removed' => $removed] + ($zones ? ['zones' => $zones] : []);
+    }
+
+    /** Create or update a zone by name. The default zone's domains stay in the settings, so they are not touched here. */
+    private static function importZone(array $row): void
+    {
+        $zone = Zone::query()->whereRaw('lower(name) = ?', [mb_strtolower($row['name'])])->first() ?? new Zone;
+        $wantsDefault = $row['default'] ?? false;
+        unset($row['default']);
+
+        if ($zone->is_default) {
+            unset($row['domains']);
+        }
+
+        $zone->fill($row + ['level' => $zone->level ?? 50]);
+        $zone->save();
+
+        if ($wantsDefault && ! $zone->is_default) {
+            $old = Zones::default();
+            if ($old && $old->id !== $zone->id) {
+                // The settings hold the default zone's domains: hand them to the old default, take the new one's.
+                $old->forceFill(['is_default' => false, 'domains' => array_filter($old->domains()) ?: null])->save();
+                $own = $zone->domains();
+                Settings::set(['local_domains' => implode(', ', $own['local']), 'public_domains' => implode(', ', $own['public'])]);
+                $zone->forceFill(['domains' => null]);
+            }
+            $zone->forceFill(['is_default' => true])->save();
+        }
     }
 
     public static function export(bool $suggestLocalDomains = false): string
@@ -152,8 +212,32 @@ final class YamlConfig
             'icon' => $s->icon,
         ], fn ($v) => $v !== null && $v !== ''))->all();
 
+        $document = ['settings' => $settings];
+
+        // With a single zone the file stays exactly as it was before zones existed.
+        if (Zones::multiple()) {
+            $document['zones'] = Zones::all()->map(fn (Zone $z) => array_filter([
+                'name' => $z->name,
+                'level' => $z->level,
+                'default' => $z->is_default ?: null,
+                'color' => $z->color,
+                'icon' => $z->icon,
+                'cidrs' => $z->cidrs ?: null,
+                // The default zone's domains are already settings.local_domains / public_domains.
+                'domains' => $z->is_default ? null : (array_filter($z->domains()) ?: null),
+                'proxy_address' => $z->proxy_address,
+                'notes' => $z->notes,
+            ], fn ($v) => $v !== null && $v !== ''))->values()->all();
+
+            $zoneNames = Zone::query()->pluck('name', 'id');
+            $servers = array_map(fn ($row, $server) => $row + ['zone' => $zoneNames[$server->zone_id] ?? null], $servers, Server::query()->orderBy('group')->orderBy('name')->get()->all());
+            $servers = array_map(fn ($row) => array_filter($row, fn ($v) => $v !== null), $servers);
+            $services = array_map(fn ($row, $service) => $row + ($service->zone_id ? ['zone' => $zoneNames[$service->zone_id] ?? null] : []), $services, Service::query()->orderBy('group')->orderBy('name')->get()->all());
+            $services = array_map(fn ($row) => array_filter($row, fn ($v) => $v !== null), $services);
+        }
+
         return "# LabMan config. Import with: php artisan labman:import <file>\n"
-            .Yaml::dump(['settings' => $settings, 'servers' => $servers, 'services' => $services], 4, 2);
+            .Yaml::dump($document + ['servers' => $servers, 'services' => $services], 4, 2);
     }
 
     // ---------------------------------------------------------------- settings
@@ -258,6 +342,144 @@ final class YamlConfig
             } else {
                 $out['ssh_user'] = $user;
             }
+        }
+
+        return $out;
+    }
+
+    // ------------------------------------------------------------------- zones
+
+    /**
+     * @param  list<string>  $errors
+     * @return list<array<string, mixed>>
+     */
+    private static function zones(mixed $raw, array &$errors): array
+    {
+        if ($raw === null) {
+            return [];
+        }
+
+        if (! is_array($raw) || (! empty($raw) && ! array_is_list($raw))) {
+            $errors[] = "'zones' must be a list";
+
+            return [];
+        }
+
+        $out = [];
+        $seen = [];
+        $defaults = 0;
+
+        foreach ($raw as $i => $item) {
+            $n = $i + 1;
+
+            if (! is_array($item) || array_is_list($item)) {
+                $errors[] = "zones[{$n}]: each zone must be a mapping";
+
+                continue;
+            }
+
+            $name = self::text($item['name'] ?? null);
+            if ($name === null || $name === '') {
+                $errors[] = "zones[{$n}]: 'name' is required";
+
+                continue;
+            }
+
+            $who = "zone '{$name}'";
+            $before = count($errors);
+
+            if (isset($seen[mb_strtolower($name)])) {
+                $errors[] = "{$who}: duplicate zone name";
+            }
+            $seen[mb_strtolower($name)] = true;
+            if (mb_strlen($name) > 60) {
+                $errors[] = "{$who}: 'name' is too long (max 60)";
+            }
+
+            $row = ['name' => $name];
+
+            if (array_key_exists('level', $item) && $item['level'] !== null) {
+                if (is_int($item['level']) && $item['level'] >= 0 && $item['level'] <= 100) {
+                    $row['level'] = $item['level'];
+                } else {
+                    $errors[] = "{$who}: 'level' must be a whole number from 0 to 100";
+                }
+            }
+
+            $color = self::text($item['color'] ?? null);
+            if ($color !== null && $color !== '') {
+                if (preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
+                    $row['color'] = strtolower($color);
+                } else {
+                    $errors[] = "{$who}: 'color' must look like #2557d6";
+                }
+            }
+
+            $row['icon'] = self::icon($who, $item, $errors);
+
+            if (array_key_exists('default', $item)) {
+                if (is_bool($item['default'])) {
+                    $row['default'] = $item['default'];
+                    $defaults += $item['default'] ? 1 : 0;
+                } else {
+                    $errors[] = "{$who}: 'default' must be true or false";
+                }
+            }
+
+            if (array_key_exists('cidrs', $item) && $item['cidrs'] !== null) {
+                $list = is_array($item['cidrs']) ? $item['cidrs'] : [];
+                if (! is_array($item['cidrs']) || ! array_is_list($item['cidrs'])) {
+                    $errors[] = "{$who}: 'cidrs' must be a list like [192.0.2.0/24]";
+                } else {
+                    foreach ($list as $cidr) {
+                        if (! is_string($cidr) || ! Zones::validCidr($cidr)) {
+                            $errors[] = "{$who}: '".(is_scalar($cidr) ? $cidr : '?')."' is not a network block like 192.0.2.0/24";
+                        }
+                    }
+                    $row['cidrs'] = array_values(array_map('strval', $list));
+                }
+            }
+
+            if (array_key_exists('domains', $item) && $item['domains'] !== null) {
+                $domains = ['local' => [], 'public' => []];
+                if (! is_array($item['domains']) || array_is_list($item['domains'])) {
+                    $errors[] = "{$who}: 'domains' must be a mapping with 'local' and/or 'public' lists";
+                } else {
+                    foreach (['local', 'public'] as $scope) {
+                        $names = Domains::parse(is_array($item['domains'][$scope] ?? null) ? $item['domains'][$scope] : (is_scalar($item['domains'][$scope] ?? null) ? (string) $item['domains'][$scope] : ''));
+                        $bad = Domains::firstInvalid($names);
+                        if ($bad !== null) {
+                            $errors[] = "{$who}: domains.{$scope} has an entry that is not a domain name: '{$bad}'";
+                        }
+                        $domains[$scope] = $names;
+                    }
+                    $row['domains'] = $domains['local'] || $domains['public'] ? $domains : null;
+                }
+            }
+
+            $proxy = self::text($item['proxy_address'] ?? null);
+            if ($proxy !== null && $proxy !== '') {
+                if (Hosts::isHostOrIp($proxy)) {
+                    $row['proxy_address'] = $proxy;
+                } else {
+                    $errors[] = "{$who}: 'proxy_address' must be an IP address or host name, not '{$proxy}'";
+                }
+            }
+
+            $notes = self::text($item['notes'] ?? null);
+            if ($notes !== null && mb_strlen($notes) > 500) {
+                $errors[] = "{$who}: 'notes' is too long (max 500)";
+            } elseif ($notes !== null && $notes !== '') {
+                $row['notes'] = $notes;
+            }
+
+            if (count($errors) === $before) {
+                $out[] = $row;
+            }
+        }
+
+        if ($defaults > 1) {
+            $errors[] = 'zones: only one zone can be the default';
         }
 
         return $out;
@@ -374,11 +596,27 @@ final class YamlConfig
                     'check_ssh' => $flags['check_ssh'],
                     'extra_domains' => $extraDomains,
                     'icon' => $icon,
-                ];
+                ] + self::zoneRef($who, $item, $errors);
             }
         }
 
         return $out;
+    }
+
+    /** The optional `zone: <name>` of a server or service. @param list<string> $errors @return array{zone?: string} */
+    private static function zoneRef(string $who, array $item, array &$errors): array
+    {
+        $zone = self::text($item['zone'] ?? null);
+        if ($zone === null || $zone === '') {
+            return [];
+        }
+        if (mb_strlen($zone) > 60) {
+            $errors[] = "{$who}: 'zone' is too long (max 60)";
+
+            return [];
+        }
+
+        return ['zone' => $zone];
     }
 
     // ---------------------------------------------------------------- services
@@ -535,7 +773,7 @@ final class YamlConfig
                     'monitor' => $flags['monitor'],
                     'check_tcp' => $flags['check_tcp'],
                     'icon' => $icon,
-                ];
+                ] + self::zoneRef($who, $item, $errors);
             }
         }
 
