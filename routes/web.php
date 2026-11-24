@@ -21,6 +21,7 @@ use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkbookController;
 use App\Http\Controllers\ZoneController;
+use App\Http\Controllers\ZoneWizardController;
 use Illuminate\Support\Facades\Route;
 
 // First-run wizard (the RedirectToSetup middleware gates it).
@@ -59,7 +60,12 @@ Route::middleware('admin')->group(function () {
     Route::resource('services', ServiceController::class)->except(['index', 'show']);
     Route::resource('servers', ServerController::class)->except(['index', 'show']);
     Route::resource('links', LinkController::class)->except(['show']);
-    Route::resource('zones', ZoneController::class)->except(['show']);
+    Route::get('/zones/setup', [ZoneWizardController::class, 'show'])->name('zones.wizard');
+    Route::post('/zones/setup/{step}', [ZoneWizardController::class, 'save'])->name('zones.wizard.save');
+    Route::post('/zones/refresh', [ZoneController::class, 'refresh'])->name('zones.refresh');
+    Route::post('/zones/assign', [ZoneController::class, 'assign'])->name('zones.assign');
+    Route::post('/zones/{zone}/refresh', [ZoneController::class, 'refresh'])->name('zones.refresh.one');
+    Route::resource('zones', ZoneController::class);
     Route::resource('users', UserController::class)->except(['index', 'show', 'destroy']);
     Route::post('/users/{user}/approve', [UserController::class, 'approve'])->name('users.approve');
 

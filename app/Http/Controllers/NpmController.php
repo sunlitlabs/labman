@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ProxyLog;
 use App\Models\Zone;
 use App\Npm\Connection;
 use App\Npm\NpmAuto;
@@ -11,6 +12,7 @@ use App\Npm\NpmSync;
 use App\Npm\NpmWizard;
 use App\Npm\ProxyStatus;
 use App\Support\DomainSuggestions;
+use App\Support\ZoneStatus;
 use App\Support\Zones;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,6 +70,11 @@ class NpmController extends Controller
 
         $first = Connection::summary($zone) === null;
         Connection::save($url, $data['email'], $data['password'], $verify, $zone);
+        ZoneStatus::forget($zone);
+
+        if ($request->input('return') === 'wizard') {
+            return redirect()->route('zones.wizard', ['step' => 'proxies'])->with('status', "Connected to Nginx Proxy Manager {$version} for the {$zone->name} zone.");
+        }
 
         // A new connection goes straight to the guided sync; changing details of an existing one stays here.
         return redirect()->route($first ? 'npm.wizard' : 'npm.index', $this->zp($zone))->with('status', "Connected to Nginx Proxy Manager {$version}".(Zones::multiple() ? " for the {$zone->name} zone" : '').'.');
@@ -117,6 +124,7 @@ class NpmController extends Controller
         }
 
         $applied = $imported['applied'] + $pushed['applied'] + count($named);
+        ProxyLog::record($zone, 'guided', array_merge($imported['results'], $pushed['results']));
 
         return redirect()->route('npm.index', $this->zp($zone))
             ->with('status', "{$applied} change(s) applied.")
@@ -153,6 +161,7 @@ class NpmController extends Controller
     {
         $zone = $this->zone($request);
         Connection::forget($zone);
+        ZoneStatus::forget($zone);
 
         return redirect()->route('npm.index', $this->zp($zone))->with('status', 'Disconnected. The saved NPM login was deleted.');
     }
@@ -236,6 +245,7 @@ class NpmController extends Controller
             }
 
             $applied += $result['applied'];
+            ProxyLog::record($zone, $mode === 'import' ? 'import' : 'preview', $result['results']);
             foreach ($result['results'] as $r) {
                 $failures += $r['outcome'] === 'failed' ? 1 : 0;
                 $results[] = ['title' => $zone->name.': '.$r['title']] + $r;
@@ -281,6 +291,8 @@ class NpmController extends Controller
         } catch (NpmException $e) {
             return redirect()->route($mode === 'import' ? 'npm.import' : 'npm.push', $this->zp($zone))->withErrors(['npm' => $e->getMessage()]);
         }
+        ProxyLog::record($zone, $mode === 'import' ? 'import' : 'preview', $result['results']);
+        ZoneStatus::forget($zone);
 
         return redirect()->route('npm.index', $this->zp($zone))
             ->with('status', "{$result['applied']} change(s) applied.")

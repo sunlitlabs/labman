@@ -133,7 +133,7 @@ class ZonesTest extends TestCase
     {
         $this->actingAs($this->admin());
 
-        $this->get(route('zones.index'))->assertOk()->assertSee('There is one zone');
+        $this->get(route('zones.index'))->assertOk()->assertSee('One zone so far');
         $this->get(route('servers.create'))->assertOk()->assertDontSee('name="zone_id"', false);
 
         $this->post(route('zones.store'), ['name' => 'External', 'level' => 10, 'cidrs' => '198.51.100.0/24', 'public_domains' => 'example.dev', 'proxy_address' => '192.0.2.5'])
@@ -253,6 +253,15 @@ class ZonesTest extends TestCase
         $this->assertSame('Core', $core->name);
         $this->assertSame('core.example.com', Settings::get('local_domains'));
         $this->assertSame(['local' => ['home.example.com'], 'public' => []], Zone::where('name', 'Default')->first()->domains());
+    }
+
+    public function test_domains_set_in_the_same_file_belong_to_the_zone_that_file_makes_default(): void
+    {
+        YamlConfig::import(YamlConfig::parse("settings:\n  local_domains: home.example.com\nzones:\n  - {name: Core, level: 90, default: true}\nservers: []\nservices: []\n"));
+
+        $this->assertSame('Core', Zones::default()->name);
+        $this->assertSame(['local' => ['home.example.com'], 'public' => []], Zones::default()->domains());
+        $this->assertSame([], Zone::where('name', 'Default')->first()->domains()['local'], 'the old default does not keep them');
     }
 
     public function test_bad_zone_yaml_is_rejected_with_clear_messages(): void

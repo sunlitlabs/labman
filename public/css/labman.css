@@ -518,3 +518,33 @@ a.is-busy { opacity: 0.6; pointer-events: none; cursor: progress; }
 .steps-done { margin: 0 0 8px; padding-left: 1.2em; font-size: 0.9rem; color: var(--muted); overflow-wrap: anywhere; }
 .check-verdict { margin: 0; font-weight: 600; }
 .check-failed { border-color: var(--down); }
+
+/* ---- zones: overview cards, detail, setup wizard ---- */
+.zone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; margin-top: 14px; }
+.zone-card { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.zone-card-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.zone-card-head h2 { margin: 0; font-size: 1.15rem; }
+.zone-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.zone-issues { margin: 4px 0; padding-left: 1.2em; }
+.zone-issues li { margin: 4px 0; overflow-wrap: anywhere; }
+.zone-card .actions { margin-top: auto; padding-top: 8px; }
+.inline-form { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+.wizard-steps ol { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 14px 0; }
+.wizard-steps li a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; text-decoration: none; color: var(--fg); }
+.wizard-steps li.is-current a { border-color: var(--accent); font-weight: 600; background: var(--unknown-bg); }
+.wizard-steps li.is-done a { border-color: var(--up); }
+.wizard-num { display: inline-block; min-width: 1.5em; text-align: center; border-radius: 50%; background: var(--unknown-bg); }
+.wizard-zones { display: grid; gap: 8px; }
+.wizard-zone { display: grid; grid-template-columns: minmax(0, 2fr) 6em minmax(0, 3fr); gap: 8px; align-items: center; }
+.wizard-zone.head { font-size: 0.85rem; color: var(--muted); }
+.wizard-zone .field { margin: 0; }
+.wizard-proxy, .wizard-domain { margin: 10px 0; }
+.proxy-section .check-failed { margin: 8px 0; }
+.plan-plain { margin: 4px 0 6px; font-weight: 500; }
+.plan-raw summary { font-size: 0.85rem; color: var(--muted); }
+.plan-raw pre { overflow-x: auto; max-width: 100%; font-size: 0.8rem; padding: 8px; background: var(--unknown-bg); border-radius: 6px; }
+@media (max-width: 640px) {
+  .wizard-zone { grid-template-columns: 1fr; }
+  .wizard-zone.head { display: none; }
+  .wizard-steps li a { padding: 8px 10px; }
+}

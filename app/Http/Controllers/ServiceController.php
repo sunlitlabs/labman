@@ -29,7 +29,7 @@ class ServiceController extends Controller
     {
         return view('services.form', [
             'service' => new Service(['scheme' => 'http', 'path' => '/', 'expect' => '200-499', 'verify_tls' => true, 'public_check' => true, 'monitor' => true, 'check_tcp' => true]),
-            'servers' => Server::orderBy('name')->get(['id', 'name']),
+            'servers' => Server::orderBy('name')->get(['id', 'name', 'address', 'zone_id']),
             'workbooks' => \App\Semaphore\Targets::workbooks(),
         ]);
     }
@@ -60,7 +60,7 @@ class ServiceController extends Controller
     {
         return view('services.form', [
             'service' => $service,
-            'servers' => Server::orderBy('name')->get(['id', 'name']),
+            'servers' => Server::orderBy('name')->get(['id', 'name', 'address', 'zone_id']),
             'workbooks' => \App\Semaphore\Targets::workbooks(),
         ]);
     }

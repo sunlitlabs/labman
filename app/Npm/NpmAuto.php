@@ -43,7 +43,7 @@ final class NpmAuto
     /** @param list<int> $ids */
     public static function queueServices(array $ids): void
     {
-        if ($ids !== []) {
+        if ($ids !== [] && self::enabled()) { // while updates are off, nothing is remembered for later
             self::pending()['services'] = array_values(array_unique([...self::pending()['services'], ...$ids]));
             self::schedule();
         }
@@ -52,7 +52,7 @@ final class NpmAuto
     /** Every host of this kind of domain ('local' or 'public'), e.g. after its certificate changed. @param list<string> $scopes */
     public static function queueScopes(array $scopes): void
     {
-        if ($scopes !== []) {
+        if ($scopes !== [] && self::enabled()) {
             self::pending()['scopes'] = array_values(array_unique([...self::pending()['scopes'], ...$scopes]));
             self::schedule();
         }
@@ -60,7 +60,15 @@ final class NpmAuto
 
     public static function serviceSaved(Service $service): void
     {
-        if ($service->wasChanged(self::SERVICE_FIELDS)) { // also true for a service that was just created with any of them set
+        if ($service->wasChanged(self::SERVICE_FIELDS)) {
+            self::queueServices([$service->id]);
+        }
+    }
+
+    /** A new service has nothing to compare with, so any name it has is enough to get its proxy host. */
+    public static function serviceCreated(Service $service): void
+    {
+        if (filled($service->domain) || filled($service->public_domain)) {
             self::queueServices([$service->id]);
         }
     }
@@ -138,6 +146,7 @@ final class NpmAuto
             } catch (NpmException $e) {
                 $result = ['applied' => 0, 'results' => [['title' => 'Nginx Proxy Manager', 'outcome' => 'failed', 'message' => $e->getMessage()]]];
             }
+            \App\Models\ProxyLog::record($zone, 'automatic', $result['results']);
             $label = \App\Support\Zones::multiple() ? $zone->name.': ' : '';
             foreach ($result['results'] as $r) {
                 $all['results'][] = ['title' => $label.$r['title']] + $r;

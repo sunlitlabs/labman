@@ -100,10 +100,12 @@ final class YamlConfig
                 Settings::set($config['settings']);
             }
 
+            // A file that sets the domain lists in its settings means them for the default zone, whichever zone that is.
+            $settingsHaveDomains = isset($config['settings']['local_domains']) || isset($config['settings']['public_domains']);
             foreach ($config['zones'] ?? [] as $row) {
                 $mirrors = $row['mirrors'] ?? null;
                 unset($row['mirrors']);
-                self::importZone($row);
+                self::importZone($row, $settingsHaveDomains);
                 $row['mirrors'] = $mirrors;
             }
             $zoneIds = Zone::query()->pluck('id', 'name')->mapWithKeys(fn ($id, $name) => [mb_strtolower($name) => $id])->all();
@@ -159,7 +161,7 @@ final class YamlConfig
     }
 
     /** Create or update a zone by name. The default zone's domains stay in the settings, so they are not touched here. */
-    private static function importZone(array $row): void
+    private static function importZone(array $row, bool $settingsHaveDomains = false): void
     {
         $zone = Zone::query()->whereRaw('lower(name) = ?', [mb_strtolower($row['name'])])->first() ?? new Zone;
         $wantsDefault = $row['default'] ?? false;
@@ -175,10 +177,13 @@ final class YamlConfig
         if ($wantsDefault && ! $zone->is_default) {
             $old = Zones::default();
             if ($old && $old->id !== $zone->id) {
-                // The settings hold the default zone's domains: hand them to the old default, take the new one's.
-                $old->forceFill(['is_default' => false, 'domains' => array_filter($old->domains()) ?: null])->save();
+                // The settings hold the default zone's domains. Domains set by this very file are the new default's;
+                // otherwise they go to the old default, and the new default's own become the settings.
+                $old->forceFill(['is_default' => false, 'domains' => $settingsHaveDomains ? null : (array_filter($old->domains()) ?: null)])->save();
                 $own = $zone->domains();
-                Settings::set(['local_domains' => implode(', ', $own['local']), 'public_domains' => implode(', ', $own['public'])]);
+                if (! $settingsHaveDomains || $own['local'] || $own['public']) {
+                    Settings::set(['local_domains' => implode(', ', $own['local']), 'public_domains' => implode(', ', $own['public'])]);
+                }
                 $zone->forceFill(['domains' => null]);
             }
             $zone->forceFill(['is_default' => true])->save();

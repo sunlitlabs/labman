@@ -343,6 +343,7 @@ final class NpmSync
 
             return $this->finish($base + [
                 'action' => 'create', 'changes' => $changes,
+                'errors' => $decision['explicit'] && $decision['mode'] === 'missing' ? $decision['warnings'] : [],
                 'data' => ['service_id' => $service->id, 'link_field' => $linkField, 'scope' => $scope, 'payload' => $payload, 'cert_request' => $request],
             ], [$intro, ...$decision['warnings'], ...(($o = $this->orderingWarning($service)) ? [$o] : [])]);
         }
@@ -431,6 +432,9 @@ final class NpmSync
             if ($item === null || ! in_array($item['action'], $actions, true) || ! hash_equals($item['fingerprint'], (string) $fingerprint)) {
                 throw new NpmException("'{$key}' changed since the preview was shown (in LabMan or in NPM), so nothing was applied. Run the preview again.");
             }
+            if (! empty($item['errors'])) {
+                throw new NpmException("'{$key}' has an error and cannot be applied: ".$item['errors'][0]);
+            }
 
             $chosen[] = $item;
         }
@@ -443,6 +447,7 @@ final class NpmSync
     {
         // Note: items are built with `$base + [...]`, where the left side wins, so $base must not predefine these.
         $item['changes'] ??= [];
+        $item['errors'] ??= [];
         $item['warnings'] = array_merge($item['warnings'] ?? [], $warnings);
         $item['fingerprint'] = sha1(json_encode([$item['key'], $item['action'], $item['changes'], $item['data'] ?? null]));
 

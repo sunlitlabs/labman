@@ -6,7 +6,21 @@
     <div class="wide">
         <h1>{{ $service->exists ? 'Edit '.$service->name : 'Add service' }}</h1>
 
-        <form method="POST" action="{{ $service->exists ? route('services.update', $service) : route('services.store') }}">
+        @php
+            $allZones = \App\Support\Zones::all();
+            $certShort = ['existing' => 'a certificate that already covers the name', 'letsencrypt_http' => "Let's Encrypt, HTTP challenge", 'letsencrypt_dns' => "Let's Encrypt, DNS challenge", 'none' => 'no certificate'];
+            $zoneInfo = [
+                'multiple' => $allZones->count() > 1,
+                'default' => \App\Support\Zones::defaultId(),
+                'zones' => $allZones->mapWithKeys(fn ($z) => [$z->id => [
+                    'name' => $z->name, 'local' => $z->domains()['local'][0] ?? null, 'public' => $z->domains()['public'][0] ?? null,
+                    'cert' => $certShort[$z->certificatePolicy()->strategy] ?? null,
+                    'mirrors_to' => $allZones->filter(fn ($o) => isset(\App\Npm\Mirrors::sourcesOf($o)[$z->id]))->pluck('name')->values()->all(),
+                ]])->all(),
+                'servers' => $servers->mapWithKeys(fn ($s) => [$s->id => ['zone' => $s->zone_id, 'address' => $s->address]])->all(),
+            ];
+        @endphp
+        <form method="POST" action="{{ $service->exists ? route('services.update', $service) : route('services.store') }}" data-zone-info="{{ json_encode($zoneInfo, JSON_UNESCAPED_SLASHES) }}">
             @csrf
             @if ($service->exists) @method('PUT') @endif
 
@@ -87,6 +101,8 @@
                     </div>
                 </div>
             </section>
+
+            <p class="hint service-preview" data-service-preview aria-live="polite"></p>
 
             <section class="formcard">
                 <h2>Health check</h2>

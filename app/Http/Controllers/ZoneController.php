@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ProxyLog;
 use App\Models\Server;
 use App\Models\Service;
 use App\Models\Zone;
@@ -12,6 +13,7 @@ use App\Npm\NpmClient;
 use App\Rules\Check;
 use App\Support\Domains;
 use App\Support\Settings;
+use App\Support\ZoneStatus;
 use App\Support\Zones;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,13 +24,88 @@ use Illuminate\Validation\ValidationException;
 /** Admin: the trust zones servers belong to. */
 class ZoneController extends Controller
 {
+    /** One card per zone, most trusted first, from the last remembered proxy status (Refresh asks the proxies again). */
     public function index()
     {
-        return view('zones.index', [
-            'zones' => Zones::all(),
-            'serverCounts' => Server::query()->selectRaw('zone_id, count(*) as n')->groupBy('zone_id')->pluck('n', 'zone_id'),
-            'serviceCounts' => Service::query()->whereNotNull('zone_id')->selectRaw('zone_id, count(*) as n')->groupBy('zone_id')->pluck('n', 'zone_id'),
+        $cards = Zones::all()->map(fn (Zone $z) => $this->card($z))->all();
+
+        return view('zones.index', ['cards' => $cards, 'multiple' => count($cards) > 1]);
+    }
+
+    /** One zone with its servers, services, issues (each with its fix) and the log of what was applied to its proxy. */
+    public function show(Zone $zone)
+    {
+        $servers = Zones::serversIn($zone)->orderBy('name')->get();
+        $others = Zones::all()->reject(fn (Zone $z) => $z->id === $zone->id);
+
+        return view('zones.show', [
+            'card' => $this->card($zone),
+            'servers' => $servers,
+            'suggestions' => $servers->mapWithKeys(fn (Server $s) => [$s->id => ($z = Zones::suggestFor($s->address)) && $z->id !== $zone->id ? $z : null])->filter(),
+            'services' => Zones::servicesIn($zone)->with('server')->orderBy('name')->get(),
+            'others' => $others,
+            'mirrorable' => $others->filter(fn (Zone $o) => ! isset(Mirrors::sourcesOf($o)[$zone->id]))->values(),
+            'log' => ProxyLog::query()->where('zone_id', $zone->id)->orderByDesc('id')->limit(10)->get(),
         ]);
+    }
+
+    /** Put a server in this zone (the inline fix for "assign this server to a zone"). */
+    public function assign(Request $request): RedirectResponse
+    {
+        $v = $request->validate(['server_id' => ['required', 'integer', 'exists:servers,id'], 'zone_id' => ['required', 'integer', 'exists:zones,id']]);
+        $server = Server::findOrFail($v['server_id']);
+        $zone = Zone::findOrFail($v['zone_id']);
+        $server->update(['zone_id' => $zone->id]);
+
+        return back()->with('status', "{$server->name} is now in the {$zone->name} zone.");
+    }
+
+    /** Ask the proxies for their status again: every zone, or the one given. */
+    public function refresh(?Zone $zone = null): RedirectResponse
+    {
+        foreach ($zone ? [$zone] : Zones::all() as $z) {
+            ZoneStatus::refresh($z);
+        }
+
+        return back()->with('status', $zone ? "Checked the {$zone->name} proxy." : 'Checked every proxy.');
+    }
+
+    /**
+     * Everything the overview shows for a zone.
+     *
+     * @return array<string, mixed>
+     */
+    private function card(Zone $zone): array
+    {
+        $status = ZoneStatus::cached($zone);
+        $connected = Connection::exists($zone);
+        $issues = [];
+
+        if (! $connected) {
+            $issues[] = ['text' => 'This zone has no proxy yet.', 'label' => 'Connect one', 'url' => route('npm.index', ['zone' => $zone->id]).'#connect'];
+        } elseif ($status && $status['state'] === 'error') {
+            $issues[] = ['text' => 'The proxy could not be reached: '.$status['message'], 'label' => 'Check the connection', 'url' => route('npm.index', ['zone' => $zone->id])];
+        } elseif ($status && $status['state'] === 'ok') {
+            if ($status['cert_problems'] > 0) {
+                $issues[] = ['text' => $status['cert_problems'].' host name(s) have a certificate that is missing or does not work.', 'label' => 'See the certificates', 'url' => route('npm.index', ['zone' => $zone->id]).'#certificates'];
+            }
+            if ($status['to_push'] > 0) {
+                $issues[] = ['text' => $status['to_push'].' change(s) are waiting to be sent to the proxy.', 'label' => 'Preview the push', 'url' => route('npm.push', ['zone' => $zone->id])];
+            }
+            if ($status['unknown_to_labman'] > 0) {
+                $issues[] = ['text' => $status['unknown_to_labman'].' proxy host(s) exist that LabMan does not know.', 'label' => 'Preview the import', 'url' => route('npm.import', ['zone' => $zone->id])];
+            }
+        }
+        if ($zone->domainNames() === []) {
+            $issues[] = ['text' => 'No domain is set for this zone, so its hosts cannot get names.', 'label' => 'Set a domain', 'url' => route('zones.edit', $zone)];
+        }
+
+        return [
+            'zone' => $zone, 'connected' => $connected, 'status' => $status, 'issues' => $issues,
+            'servers' => Zones::serversIn($zone)->count(), 'services' => Zones::servicesIn($zone)->count(),
+            'domains' => $zone->domainNames(), 'mirrors' => count(Mirrors::sourcesOf($zone)),
+            'policy' => $zone->certificatePolicy(),
+        ];
     }
 
     public function create()

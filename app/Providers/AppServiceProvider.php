@@ -35,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
 
         // LabMan is the source of truth for Nginx Proxy Manager: changed services update their proxy hosts.
         \App\Models\Service::saved(fn (\App\Models\Service $s) => \App\Npm\NpmAuto::serviceSaved($s));
+        \App\Models\Service::created(fn (\App\Models\Service $s) => \App\Npm\NpmAuto::serviceCreated($s));
         Server::saved(fn (Server $s) => \App\Npm\NpmAuto::serverSaved($s));
 
         // Editing anything is admin-only.

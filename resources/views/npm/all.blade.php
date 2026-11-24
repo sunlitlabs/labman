@@ -23,7 +23,7 @@
         @foreach ($sections as $s)
             @php($zone = $s['zone'])
             @php($items = $s['items'])
-            @php($actionable = collect($items)->whereIn('action', ['create', 'update']))
+            @php($actionable = collect($items)->whereIn('action', ['create', 'update'])->filter(fn ($i) => empty($i['errors'])))
             @php($byAction = collect($items)->countBy('action'))
             <section class="proxy-section" id="zone-{{ $zone->id }}">
                 <div class="proxy-head">
@@ -48,7 +48,7 @@
                         <p class="check-verdict">{{ $actionable->isEmpty() ? 'Nothing needs changing.' : $actionable->count().' '.($actionable->count() === 1 ? 'change is' : 'changes are').' ready to review below.' }}</p>
                     </div>
                     @if ($items !== [])
-                        @include('npm._items', ['items' => $items, 'isImport' => $isImport, 'applyName' => 'apply['.$zone->id.'][]', 'fpPrefix' => 'fp['.$zone->id.']'])
+                        @include('npm._items', ['items' => $items, 'isImport' => $isImport, 'applyName' => 'apply['.$zone->id.'][]', 'fpPrefix' => 'fp['.$zone->id.']', 'zoneName' => $zone->name])
                     @endif
                 @endif
             </section>

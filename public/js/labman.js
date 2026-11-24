@@ -503,3 +503,70 @@
 
   if (url) schedule();
 })();
+
+/* Service form: the resulting URL while typing, which zone the service is in, where else it is published,
+   and the zone's own domain as the suggested name. Reads the zone data the form carries; does nothing without it. */
+(function () {
+  'use strict';
+  var form = document.querySelector('form[data-zone-info]');
+  var out = document.querySelector('[data-service-preview]');
+  if (!form || !out) return;
+
+  var info;
+  try { info = JSON.parse(form.getAttribute('data-zone-info')); } catch (e) { return; }
+
+  function val(sel) { var el = form.querySelector(sel); return el ? el.value.trim() : ''; }
+  function firstName(field) {
+    var inputs = form.querySelectorAll('input[name="' + field + '[]"]');
+    for (var i = 0; i < inputs.length; i++) if (inputs[i].value.trim() !== '') return inputs[i].value.trim();
+    return '';
+  }
+
+  function zoneId() {
+    var own = val('#zone_id');
+    if (own) return own;
+    var server = info.servers[val('#server_id')];
+    return server && server.zone ? String(server.zone) : String(info.default);
+  }
+
+  function refresh() {
+    var zone = info.zones[zoneId()];
+    var server = info.servers[val('#server_id')];
+    var host = firstName('local_domains') || firstName('public_domains') || (server ? server.address : val('#address'));
+    var scheme = val('#scheme') || 'http';
+    var port = val('#port');
+    var defaultPort = scheme === 'https' ? '443' : '80';
+    var path = val('#path') || '/';
+
+    var text = host ? 'Resulting address: ' + scheme + '://' + host + (port && port !== defaultPort ? ':' + port : '') + path : 'Resulting address: enter a name, a server or an address.';
+    var lines = [text];
+
+    if (zone) {
+      var also = (zone.mirrors_to || []).slice();
+      form.querySelectorAll('input[name="publish_in[]"]:checked').forEach(function (box) {
+        var z = info.zones[box.value];
+        if (z && also.indexOf(z.name) === -1) also.push(z.name);
+      });
+      lines.push('Zone: ' + zone.name + (info.multiple ? '.' : ''));
+      if (info.multiple) lines[lines.length - 1] += also.length ? ' Also published in: ' + also.join(', ') + '.' : ' Not published in other zones.';
+    }
+    out.textContent = lines.join(' ');
+
+    // Suggest names under the zone's own domains when "Add" is pressed, and say what "Automatic" means for its certificate.
+    form.querySelectorAll('[data-listedit]').forEach(function (box) {
+      var tpl = box.querySelector('template[data-row]');
+      var probe = box.querySelector('.listedit-rows input[type=text]') || (tpl && tpl.content ? tpl.content.querySelector('input[type=text]') : null);
+      var name = probe ? probe.name : '';
+      if (!box.hasAttribute('data-suffix-default')) box.setAttribute('data-suffix-default', box.getAttribute('data-suffix') || '');
+      var wanted = zone ? (name.indexOf('public_domains') === 0 ? zone['public'] : zone.local) : null;
+      var suffix = wanted || box.getAttribute('data-suffix-default');
+      if (suffix) box.setAttribute('data-suffix', suffix);
+    });
+    var auto = form.querySelector('#cert_mode option[value="auto"]');
+    if (auto && zone && zone.cert) auto.textContent = 'Automatic (' + zone.name + ': ' + zone.cert + ')';
+  }
+
+  form.addEventListener('input', refresh);
+  form.addEventListener('change', refresh);
+  refresh();
+})();

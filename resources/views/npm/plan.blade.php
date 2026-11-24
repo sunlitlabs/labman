@@ -3,7 +3,7 @@
 @php
     $isImport = $mode === 'import';
     $zp = $zp ?? [];
-    $actionable = collect($items)->whereIn('action', ['create', 'update']);
+    $actionable = collect($items)->whereIn('action', ['create', 'update'])->filter(fn ($i) => empty($i['errors']));
 @endphp
 
 @section('title', $isImport ? 'Preview NPM import' : 'Preview NPM push')
@@ -34,7 +34,7 @@
     @else
         <form method="POST" action="{{ route($isImport ? 'npm.import.apply' : 'npm.push.apply', $zp) }}">
             @csrf
-            @include('npm._items', ['items' => $items, 'isImport' => $isImport, 'applyName' => 'apply[]', 'fpPrefix' => 'fp'])
+            @include('npm._items', ['items' => $items, 'isImport' => $isImport, 'applyName' => 'apply[]', 'fpPrefix' => 'fp', 'zoneName' => isset($zone) ? $zone->name : null])
 
             <div class="savebar plan-actions">
                 @if ($actionable->isNotEmpty())
