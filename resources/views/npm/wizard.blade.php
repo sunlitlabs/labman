@@ -4,7 +4,7 @@
 
 @section('focus', '1')
 @section('crumb', 'Nginx Proxy Manager')
-@section('crumb_url', route('npm.index'))
+@section('crumb_url', route('npm.index', $zp ?? []))
 
 @php
     $sections = [
@@ -22,7 +22,7 @@
     <h1>Match up with Nginx Proxy Manager</h1>
 
     @if ($only)
-        <p class="muted">Showing only the service you came from. <a href="{{ route('npm.wizard') }}">Show everything</a></p>
+        <p class="muted">Showing only the service you came from. <a href="{{ route('npm.wizard', $zp ?? []) }}">Show everything</a></p>
     @else
         <p class="muted">
             Connected to <span class="mono">{{ $connection['url'] }}</span>.
@@ -38,6 +38,7 @@
     @endif
 
     <form class="formcard suggest-toggle" method="GET" action="{{ route('npm.wizard') }}">
+        @if (! empty($zp))<input type="hidden" name="zone" value="{{ $zp['zone'] }}">@endif
         @if ($only)<input type="hidden" name="service" value="{{ $only }}">@endif
         <label class="check">
             <input type="checkbox" name="suggest" value="1" @checked($suggest) @disabled(! $suggestAvailable) data-autosubmit>
@@ -50,10 +51,10 @@
     @if ($actionable->isEmpty())
         <div class="card empty">
             Everything that can be matched is already matched.
-            <a href="{{ route('npm.index') }}">Back to Nginx Proxy Manager</a>
+            <a href="{{ route('npm.index', $zp ?? []) }}">Back to Nginx Proxy Manager</a>
         </div>
     @else
-        <form method="POST" action="{{ route('npm.wizard.apply') }}">
+        <form method="POST" action="{{ route('npm.wizard.apply', $zp ?? []) }}">
             @csrf
 
             @foreach ($sections as $kind => [$heading, $explain])
@@ -108,7 +109,7 @@
 
             <div class="savebar">
                 <button class="primary" type="submit">Apply my choices</button>
-                <a class="btn" href="{{ route('npm.index') }}">Skip for now</a>
+                <a class="btn" href="{{ route('npm.index', $zp ?? []) }}">Skip for now</a>
             </div>
         </form>
     @endif

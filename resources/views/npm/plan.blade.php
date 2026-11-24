@@ -2,6 +2,7 @@
 
 @php
     $isImport = $mode === 'import';
+    $zp = $zp ?? [];
     $actionable = collect($items)->whereIn('action', ['create', 'update']);
 @endphp
 
@@ -9,10 +10,10 @@
 
 @section('focus', '1')
 @section('crumb', 'Nginx Proxy Manager')
-@section('crumb_url', route('npm.index'))
+@section('crumb_url', route('npm.index', $zp))
 
 @section('admin')
-    <h1>{{ $isImport ? 'Import from NPM' : 'Push to NPM' }}: preview</h1>
+    <h1>{{ $isImport ? 'Import from NPM' : 'Push to NPM' }}: preview <span class="muted">{{ $zp && isset($zone) ? '· '.$zone->name.' zone' : '' }}</span></h1>
     <p class="muted">
         @if ($isImport)
             Proxy hosts in Nginx Proxy Manager compared with your LabMan services. Ticked changes will be saved to LabMan; NPM is not touched.
@@ -31,45 +32,9 @@
     @if ($items === [])
         <div class="card empty">{{ $isImport ? 'NPM has no proxy hosts.' : 'No LabMan service has a domain, so there is nothing to push.' }}</div>
     @else
-        <form method="POST" action="{{ route($isImport ? 'npm.import.apply' : 'npm.push.apply') }}">
+        <form method="POST" action="{{ route($isImport ? 'npm.import.apply' : 'npm.push.apply', $zp) }}">
             @csrf
-            <div class="rows plan">
-                @foreach ($items as $item)
-                    @php($can = in_array($item['action'], ['create', 'update']))
-                    <div class="plan-item plan-{{ $item['action'] }}">
-                        <div class="plan-head">
-                            @if ($can)
-                                <label class="check">
-                                    <input type="checkbox" name="apply[]" value="{{ $item['key'] }}" @checked($isImport || $item['action'] === 'update')>
-                                    <strong>{{ $item['title'] }}</strong>
-                                </label>
-                                <input type="hidden" name="fp[{{ $item['key'] }}]" value="{{ $item['fingerprint'] }}">
-                            @else
-                                <strong>{{ $item['title'] }}</strong>
-                            @endif
-                            <span class="pill pill-{{ ['create' => 'degraded', 'update' => 'degraded', 'unchanged' => 'up', 'skip' => 'unknown'][$item['action']] }}">
-                                {{ ['create' => $isImport ? 'new service' : 'new proxy host', 'update' => 'update', 'unchanged' => 'in sync', 'skip' => 'skipped'][$item['action']] }}
-                            </span>
-                        </div>
-
-                        @if ($item['changes'])
-                            <ul class="changes">
-                                @foreach ($item['changes'] as $c)
-                                    <li>
-                                        <span class="field">{{ $c['field'] }}</span>
-                                        @if ($c['from'] !== null && $c['from'] !== '') <span class="from">{{ $c['from'] }}</span> → @endif
-                                        <span class="to">{{ $c['to'] }}</span>
-                                    </li>
-                                @endforeach
-                            </ul>
-                        @endif
-
-                        @foreach ($item['warnings'] as $w)
-                            <p class="warn">{{ $w }}</p>
-                        @endforeach
-                    </div>
-                @endforeach
-            </div>
+            @include('npm._items', ['items' => $items, 'isImport' => $isImport, 'applyName' => 'apply[]', 'fpPrefix' => 'fp'])
 
             <div class="savebar plan-actions">
                 @if ($actionable->isNotEmpty())
@@ -77,7 +42,7 @@
                 @else
                     <span class="muted">Nothing to apply.</span>
                 @endif
-                <a class="btn" href="{{ route('npm.index') }}">Back</a>
+                <a class="btn" href="{{ route('npm.index', $zp) }}">Back</a>
             </div>
         </form>
     @endif

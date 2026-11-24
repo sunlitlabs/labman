@@ -49,6 +49,31 @@ final class Zones
     }
 
     /**
+     * The services that belong to a zone: those that name it, and those that follow a server in it. Services with
+     * no zone of their own and no server (or a server with no zone) belong to the default zone.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Service>
+     */
+    public static function servicesIn(Zone $zone)
+    {
+        return Service::query()->where(function ($q) use ($zone) {
+            $q->where('zone_id', $zone->id)
+                ->orWhere(fn ($q) => $q->whereNull('zone_id')->whereHas('server', fn ($s) => $s->where('zone_id', $zone->id)));
+
+            if ($zone->is_default) {
+                $q->orWhere(fn ($q) => $q->whereNull('zone_id')->whereNull('server_id'))
+                    ->orWhere(fn ($q) => $q->whereNull('zone_id')->whereHas('server', fn ($s) => $s->whereNull('zone_id')));
+            }
+        });
+    }
+
+    /** The servers in a zone (a server with no zone counts as default). @return \Illuminate\Database\Eloquent\Builder<Server> */
+    public static function serversIn(Zone $zone)
+    {
+        return Server::query()->where(fn ($q) => $q->where('zone_id', $zone->id)->when($zone->is_default, fn ($q) => $q->orWhereNull('zone_id')));
+    }
+
+    /**
      * The zones whose domain is the longest suffix of the host name (a zone for "*.a.example.dev" beats one for
      * "*.example.dev"). More than one means two zones claim the same name: the caller shows it and asks for an owner.
      *

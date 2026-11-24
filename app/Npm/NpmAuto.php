@@ -18,7 +18,7 @@ use Throwable;
 final class NpmAuto
 {
     /** Fields of a service that end up in its proxy host. */
-    public const SERVICE_FIELDS = ['domain', 'public_domain', 'scheme', 'port', 'address', 'server_id', 'websockets'];
+    public const SERVICE_FIELDS = ['domain', 'public_domain', 'scheme', 'port', 'address', 'server_id', 'websockets', 'zone_id'];
 
     /** What is waiting to be sent. Kept on the application instance so it never leaks between requests (or tests). */
     private static function pending(): \ArrayObject
@@ -32,7 +32,7 @@ final class NpmAuto
 
     public static function enabled(): bool
     {
-        return Connection::exists() && Secrets::plain('npm.auto') !== '0';
+        return Connection::anyExists() && Secrets::plain('npm.auto') !== '0';
     }
 
     public static function setEnabled(bool $on): void
@@ -68,7 +68,7 @@ final class NpmAuto
     /** A server's address decides where its services' proxy hosts forward to. */
     public static function serverSaved(Server $server): void
     {
-        if ($server->wasChanged('address')) {
+        if ($server->wasChanged(['address', 'zone_id'])) {
             self::queueServices(Service::query()->where('server_id', $server->id)->pluck('id')->map(fn ($i) => (int) $i)->all());
         }
     }
@@ -94,7 +94,7 @@ final class NpmAuto
         }
 
         try {
-            self::run($services, $scopes);
+            self::runAll($services, $scopes);
         } catch (Throwable $e) {
             $message = $e instanceof NpmException ? $e->getMessage() : 'Unexpected error: '.$e->getMessage();
             self::record(false, 0, [['title' => 'Nginx Proxy Manager', 'outcome' => 'failed', 'message' => $message]]);
@@ -103,17 +103,67 @@ final class NpmAuto
     }
 
     /**
-     * Push the chosen services' hosts (and every host of the chosen kinds of domain) to NPM now.
+     * Send each changed service to the proxy of its own zone. The certificate scopes belong to the default zone.
+     * A zone without a login is skipped, and one proxy failing does not stop the others.
      *
      * @param  list<int>  $services
      * @param  list<string>  $scopes
+     */
+    private static function runAll(array $services, array $scopes): void
+    {
+        $byZone = [];
+        foreach (Service::query()->with('server')->whereIn('id', $services)->get() as $service) {
+            $zone = \App\Support\Zones::of($service);
+            if ($zone !== null) {
+                $byZone[$zone->id][] = $service->id;
+            }
+        }
+        $defaultId = \App\Support\Zones::defaultId();
+        if ($scopes !== [] && $defaultId !== null) {
+            $byZone[$defaultId] ??= [];
+        }
+
+        $all = ['applied' => 0, 'results' => []];
+        $failedAny = false;
+        foreach (\App\Models\Zone::query()->whereIn('id', array_keys($byZone))->get() as $zone) {
+            if (! Connection::exists($zone)) {
+                continue;
+            }
+            try {
+                $result = self::run($byZone[$zone->id], $zone->is_default ? $scopes : [], $zone, false);
+            } catch (NpmException $e) {
+                $result = ['applied' => 0, 'results' => [['title' => 'Nginx Proxy Manager', 'outcome' => 'failed', 'message' => $e->getMessage()]]];
+            }
+            $label = \App\Support\Zones::multiple() ? $zone->name.': ' : '';
+            foreach ($result['results'] as $r) {
+                $all['results'][] = ['title' => $label.$r['title']] + $r;
+            }
+            $all['applied'] += $result['applied'];
+        }
+
+        $failed = array_values(array_filter($all['results'], fn ($r) => $r['outcome'] === 'failed'));
+        self::record($failed === [], $all['applied'], $all['results']);
+
+        if ($failed === []) {
+            Notice::resolve('npm-sync');
+        } else {
+            Notice::raise('npm-sync', 'warning', 'Nginx Proxy Manager was not fully updated', $failed[0]['title'].': '.$failed[0]['message'], route('npm.index'));
+        }
+    }
+
+    /**
+     * Push the chosen services' hosts (and every host of the chosen kinds of domain) to one zone's NPM now.
+     *
+     * @param  list<int>  $services
+     * @param  list<string>  $scopes
+     * @param  bool  $record  write the result and the admin notice (false when a caller combines several zones)
      * @return array{applied: int, results: list<array<string, string>>}
      *
      * @throws NpmException
      */
-    public static function run(array $services, array $scopes): array
+    public static function run(array $services, array $scopes, ?\App\Models\Zone $zone = null, bool $record = true): array
     {
-        $sync = new NpmSync(NpmClient::fromStored());
+        $sync = new NpmSync(NpmClient::fromStored($zone), $zone);
         $selected = [];
 
         foreach ($sync->pushPlan($scopes === [] ? $services : null) as $item) {
@@ -124,6 +174,10 @@ final class NpmAuto
         }
 
         $result = $selected === [] ? ['applied' => 0, 'results' => []] : $sync->applyPush($selected);
+        if (! $record) {
+            return $result;
+        }
+
         $failed = array_values(array_filter($result['results'], fn ($r) => $r['outcome'] === 'failed'));
 
         self::record($failed === [], $result['applied'], $result['results']);

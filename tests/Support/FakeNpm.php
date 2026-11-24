@@ -28,10 +28,32 @@ final class FakeNpm
 
     private int $nextId = 1;
 
-    public static function install(): self
+    /** The address this instance answers on (tests with several proxies install one instance per address). */
+    public string $url = self::URL;
+
+    /** @var array<string, self> instances by address, so one Http fake can serve several proxies */
+    private static array $all = [];
+
+    /** Installing at the default address starts a fresh set; other addresses add a second proxy. */
+    public static function install(string $url = self::URL): self
     {
         $npm = new self;
-        Http::fake(fn (Request $request) => $npm->handle($request));
+        $npm->url = $url;
+
+        if ($url === self::URL) {
+            self::$all = [];
+        }
+        self::$all[$url] = $npm;
+
+        Http::fake(function (Request $request) {
+            foreach (self::$all as $url => $instance) {
+                if (str_starts_with($request->url(), $url)) {
+                    return $instance->handle($request);
+                }
+            }
+
+            return Http::response('not npm', 404);
+        });
 
         return $npm;
     }
@@ -69,7 +91,7 @@ final class FakeNpm
         $method = $request->method();
         $body = $request->data();
 
-        if (! str_starts_with($request->url(), self::URL)) {
+        if (! str_starts_with($request->url(), $this->url)) {
             return Http::response('not npm', 404);
         }
 

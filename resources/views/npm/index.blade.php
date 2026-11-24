@@ -8,6 +8,46 @@
         Import proxy hosts as services, or push LabMan's services back to NPM. Every change is previewed first and
         nothing is written until you tick it. LabMan never deletes anything in NPM.
     </p>
+    @if ($zones->count() > 1)
+        {{-- One proxy per zone: a status row for each, and the page below is for the zone picked here. --}}
+        <div class="card proxies">
+            <h2>Proxies <span class="hint">one per zone</span></h2>
+            <div class="rows">
+                @foreach ($proxies as $p)
+                    @php($z = $p['zone'])
+                    <article class="row {{ $z->id === $zone->id ? 'is-current' : '' }}">
+                        <div class="cell name">
+                            <a class="nm" href="{{ route('npm.index', ['zone' => $z->id]) }}" @if ($z->id === $zone->id) aria-current="true" @endif>{{ $z->name }}</a>
+                            <small>Level {{ $z->level }}</small>
+                        </div>
+                        <div class="cell">
+                            @if ($p['state'] === 'none')
+                                <span class="pill pill-unknown">no proxy</span>
+                                <small><a href="{{ route('npm.index', ['zone' => $z->id]) }}#connect">Connect one</a></small>
+                            @elseif ($p['state'] === 'error')
+                                <span class="pill pill-down">unreachable</span>
+                                <small class="warn">{{ $p['message'] }}</small>
+                            @else
+                                <span class="pill pill-up">connected</span>
+                                <small>NPM {{ $p['version'] }} · {{ $p['hosts'] }} host(s)</small>
+                            @endif
+                        </div>
+                        <div class="cell">
+                            @if ($p['state'] === 'ok')
+                                <small>{{ $p['unknown_to_labman'] }} in NPM that LabMan does not know · {{ $p['to_push'] }} LabMan change(s) to send</small>
+                            @endif
+                        </div>
+                    </article>
+                @endforeach
+            </div>
+            <div class="actions">
+                <a class="btn" href="{{ route('npm.all', ['mode' => 'push']) }}" data-progress='["Connecting to each proxy","Reading their proxy hosts","Working out what would change in each"]'>Preview push to all proxies</a>
+                <a class="btn" href="{{ route('npm.all', ['mode' => 'import']) }}" data-progress='["Connecting to each proxy","Reading their proxy hosts","Working out what would change in LabMan"]'>Preview import from all proxies</a>
+            </div>
+        </div>
+        <h2>{{ $zone->name }}</h2>
+    @endif
+
     @unless ($connection)
         <p class="notice">Connect below. LabMan then walks you through matching your proxy hosts with your services, with sensible defaults already chosen.</p>
     @endunless
@@ -31,11 +71,11 @@
                 @unless ($connection['verify_tls']) <span class="muted">(TLS certificate not verified)</span> @endunless
             </p>
             <div class="actions">
-                <a class="btn btn-primary" href="{{ route('npm.wizard') }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts and certificates","Matching them with your services and servers"]'>Match everything up (guided)</a>
-                <a class="btn" href="{{ route('npm.import') }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts","Working out what would change in LabMan"]'>Preview import (NPM → LabMan)</a>
-                <a class="btn" href="{{ route('npm.push') }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts","Working out what would change in Nginx Proxy Manager"]'>Preview push (LabMan → NPM)</a>
+                <a class="btn btn-primary" href="{{ route('npm.wizard', $zp) }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts and certificates","Matching them with your services and servers"]'>Match everything up (guided)</a>
+                <a class="btn" href="{{ route('npm.import', $zp) }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts","Working out what would change in LabMan"]'>Preview import (NPM → LabMan)</a>
+                <a class="btn" href="{{ route('npm.push', $zp) }}" data-progress='["Connecting to Nginx Proxy Manager","Reading its proxy hosts","Working out what would change in Nginx Proxy Manager"]'>Preview push (LabMan → NPM)</a>
                 <a class="btn" href="{{ $connection['url'] }}" target="_blank" rel="noopener noreferrer">Open NPM</a>
-                <form method="POST" action="{{ route('npm.disconnect') }}">
+                <form method="POST" action="{{ route('npm.disconnect', $zp) }}">
                     @csrf @method('DELETE')
                     <button class="btn-danger" type="submit" data-confirm>Disconnect</button>
                 </form>
@@ -48,7 +88,7 @@
     @endif
 
     @if ($connection)
-        <form class="formcard" method="POST" action="{{ route('npm.auto') }}">
+        <form class="formcard" method="POST" action="{{ route('npm.auto', $zp) }}">
             @csrf
             <h2>Keep NPM up to date</h2>
             <label class="check">
@@ -72,6 +112,7 @@
         @endif
     @endif
 
+    @if ($zone->is_default)
     <form class="formcard" method="POST" action="{{ route('npm.domains') }}">
         @csrf @method('PUT')
         <h2>Domains and certificates</h2>
@@ -106,7 +147,13 @@
         </div>
         <div class="savebar"><button class="primary" type="submit">Save domains</button></div>
     </form>
-    <form class="card" method="POST" action="{{ route('npm.connect') }}">
+    @else
+    <div class="card">
+        <h2>Domains and certificates</h2>
+        <p class="sub">The {{ $zone->name }} zone's domains: {{ implode(', ', $zone->domainNames()) ?: 'none set' }}. Change them on the <a href="{{ route('zones.edit', $zone) }}">zone's page</a>. New proxy hosts here are created without a certificate until certificate policies are set per zone.</p>
+    </div>
+    @endif
+    <form class="card" id="connect" method="POST" action="{{ route('npm.connect', $zp) }}">
         @csrf
         <h2>{{ $connection ? 'Change connection' : 'Connect' }}</h2>
         <div class="grid2">

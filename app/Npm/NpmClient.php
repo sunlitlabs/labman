@@ -19,12 +19,14 @@ final class NpmClient
     public function __construct(private readonly array $connection, private readonly float $timeout = 10.0) {}
 
     /** @throws NpmException when nothing is configured */
-    public static function fromStored(): self
+    public static function fromStored(?\App\Models\Zone $zone = null): self
     {
-        $connection = Connection::get();
+        $connection = Connection::get($zone);
 
         if ($connection === null) {
-            throw new NpmException('Nginx Proxy Manager is not connected. Save its address and login first.');
+            $where = $zone !== null && \App\Support\Zones::multiple() ? " for the {$zone->name} zone" : '';
+
+            throw new NpmException("Nginx Proxy Manager is not connected{$where}. Save its address and login first.");
         }
 
         return new self($connection);

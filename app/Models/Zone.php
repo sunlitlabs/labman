@@ -44,6 +44,23 @@ class Zone extends Model
         return ['local' => Domains::parse($stored['local'] ?? []), 'public' => Domains::parse($stored['public'] ?? [])];
     }
 
+    /** 'local' or 'public' if the host sits under one of this zone's domains (public wins a tie), else null. */
+    public function scopeOf(string $host): ?string
+    {
+        $host = mb_strtolower($host);
+        $domains = $this->domains();
+
+        foreach (['public', 'local'] as $scope) {
+            foreach ($domains[$scope] as $domain) {
+                if ($host === $domain || str_ends_with($host, '.'.$domain)) {
+                    return $scope;
+                }
+            }
+        }
+
+        return null;
+    }
+
     /** Every domain name of the zone, local first. @return list<string> */
     public function domainNames(): array
     {

@@ -97,6 +97,8 @@ Route::middleware('admin')->group(function () {
     Route::post('/npm/import', [NpmController::class, 'importApply'])->name('npm.import.apply');
     Route::get('/npm/push', [NpmController::class, 'pushPreview'])->name('npm.push');
     Route::post('/npm/push', [NpmController::class, 'pushApply'])->name('npm.push.apply');
+    Route::get('/npm/all', [NpmController::class, 'allPreview'])->name('npm.all');
+    Route::post('/npm/all', [NpmController::class, 'allApply'])->name('npm.all.apply');
 
     Route::post('/settings/tokens', [ApiTokenController::class, 'store'])->name('tokens.store');
     Route::delete('/settings/tokens/{token}', [ApiTokenController::class, 'destroy'])->name('tokens.destroy');

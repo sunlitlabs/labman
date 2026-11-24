@@ -3,38 +3,64 @@
 namespace App\Npm;
 
 use App\Models\Setting;
+use App\Models\Zone;
+use App\Support\Zones;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * The saved Nginx Proxy Manager login. The e-mail and password are encrypted with
- * the application key (which lives in the data volume); they are never shown again,
- * never exported to YAML and never returned by an MCP tool.
+ * The saved Nginx Proxy Manager logins, one per zone (the default zone keeps the original, single-proxy keys).
+ * The e-mail and password are encrypted with the application key (which lives in the data volume); they are never
+ * shown again, never exported to YAML and never returned by an MCP tool.
+ *
+ * Every method takes an optional zone; none means the default zone, so single-proxy callers are unchanged.
  */
 final class Connection
 {
-    private const KEYS = ['npm.url', 'npm.email', 'npm.password', 'npm.verify_tls'];
+    private const FIELDS = ['url', 'email', 'password', 'verify_tls'];
 
-    public static function exists(): bool
+    /** @return list<string> the setting keys of one zone's login */
+    private static function keys(?Zone $zone): array
     {
-        return self::get() !== null;
+        $zone ??= Zones::default();
+        $prefix = $zone === null || $zone->is_default ? 'npm.' : 'npm.z'.$zone->id.'.';
+
+        return array_map(fn ($f) => $prefix.$f, self::FIELDS);
+    }
+
+    public static function exists(?Zone $zone = null): bool
+    {
+        return self::get($zone) !== null;
+    }
+
+    /** Does any zone have a login? (What decides whether NPM features are on at all.) */
+    public static function anyExists(): bool
+    {
+        return self::connectedZones() !== [];
+    }
+
+    /** The zones that have a readable login, most trusted first. @return list<Zone> */
+    public static function connectedZones(): array
+    {
+        return Zones::all()->filter(fn (Zone $z) => self::exists($z))->values()->all();
     }
 
     /** @return array{url: string, email: string, password: string, verify_tls: bool}|null */
-    public static function get(): ?array
+    public static function get(?Zone $zone = null): ?array
     {
-        $rows = Setting::query()->whereIn('key', self::KEYS)->pluck('value', 'key');
+        [$url, $email, $password, $verify] = self::keys($zone);
+        $rows = Setting::query()->whereIn('key', [$url, $email, $password, $verify])->pluck('value', 'key');
 
-        if (! isset($rows['npm.url'], $rows['npm.email'], $rows['npm.password'])) {
+        if (! isset($rows[$url], $rows[$email], $rows[$password])) {
             return null;
         }
 
         try {
             return [
-                'url' => $rows['npm.url'],
-                'email' => Crypt::decryptString($rows['npm.email']),
-                'password' => Crypt::decryptString($rows['npm.password']),
-                'verify_tls' => ($rows['npm.verify_tls'] ?? '1') === '1',
+                'url' => $rows[$url],
+                'email' => Crypt::decryptString($rows[$email]),
+                'password' => Crypt::decryptString($rows[$password]),
+                'verify_tls' => ($rows[$verify] ?? '1') === '1',
             ];
         } catch (DecryptException) {
             return null; // the application key changed: the saved login is unreadable
@@ -42,20 +68,21 @@ final class Connection
     }
 
     /** What is safe to display: no password. @return array{url: string, email: string, verify_tls: bool}|null */
-    public static function summary(): ?array
+    public static function summary(?Zone $zone = null): ?array
     {
-        $c = self::get();
+        $c = self::get($zone);
 
         return $c ? ['url' => $c['url'], 'email' => $c['email'], 'verify_tls' => $c['verify_tls']] : null;
     }
 
-    public static function save(string $url, string $email, string $password, bool $verifyTls): void
+    public static function save(string $url, string $email, string $password, bool $verifyTls, ?Zone $zone = null): void
     {
+        [$kUrl, $kEmail, $kPassword, $kVerify] = self::keys($zone);
         $values = [
-            'npm.url' => $url,
-            'npm.email' => Crypt::encryptString($email),
-            'npm.password' => Crypt::encryptString($password),
-            'npm.verify_tls' => $verifyTls ? '1' : '0',
+            $kUrl => $url,
+            $kEmail => Crypt::encryptString($email),
+            $kPassword => Crypt::encryptString($password),
+            $kVerify => $verifyTls ? '1' : '0',
         ];
 
         foreach ($values as $key => $value) {
@@ -63,10 +90,13 @@ final class Connection
         }
     }
 
-    public static function forget(): void
+    public static function forget(?Zone $zone = null): void
     {
-        Setting::query()->whereIn('key', self::KEYS)->delete();
-        NpmAuto::forget();
+        Setting::query()->whereIn('key', self::keys($zone))->delete();
+
+        if (! self::anyExists()) {
+            NpmAuto::forget(); // the automatic-update switch and its last result belong to "NPM is connected at all"
+        }
     }
 
     /**

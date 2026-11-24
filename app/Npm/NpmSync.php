@@ -5,9 +5,11 @@ namespace App\Npm;
 use App\Domain\ServiceInput;
 use App\Models\Server;
 use App\Models\Service;
+use App\Models\Zone;
 use App\Support\Domains;
 use App\Support\Hosts;
 use App\Support\Settings;
+use App\Support\Zones;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -26,7 +28,18 @@ use Illuminate\Validation\ValidationException;
  */
 final class NpmSync
 {
-    public function __construct(private readonly NpmClient $client) {}
+    /** The zone this sync is for: one proxy serves the services of one zone. None means the default zone. */
+    private readonly Zone $zone;
+
+    public function __construct(private readonly NpmClient $client, ?Zone $zone = null)
+    {
+        $this->zone = $zone ?? Zones::default() ?? throw new NpmException('There is no zone to sync.');
+    }
+
+    public function zone(): Zone
+    {
+        return $this->zone;
+    }
 
     // ====================================================================== import
 
@@ -34,8 +47,8 @@ final class NpmSync
     public function importPlan(): array
     {
         $hosts = $this->client->proxyHosts();
-        $services = Service::with('server')->get();
-        $servers = Server::all();
+        $services = Zones::servicesIn($this->zone)->with('server')->get();
+        $servers = Zones::serversIn($this->zone)->get();
         $usedNames = $services->pluck('name')->map(fn ($n) => mb_strtolower($n))->all();
 
         $items = [];
@@ -60,6 +73,16 @@ final class NpmSync
                 $existing = $item['data']['service_id'] ? Service::find($item['data']['service_id']) : null;
                 $payload = ServiceInput::validate($item['data']['input'], $existing);
                 $payload[$item['data']['link_field']] = $item['data']['host_id'];
+
+                // A service made from this proxy's host belongs to this proxy's zone: through its server when that is
+                // in the zone, otherwise by naming the zone itself.
+                if ($existing === null) {
+                    $server = ($payload['server_id'] ?? null) ? Server::find($payload['server_id']) : null;
+                    $effective = $server !== null ? ($server->zone_id ?? Zones::defaultId()) : Zones::defaultId();
+                    if ($effective !== $this->zone->id) {
+                        $payload['zone_id'] = $this->zone->id;
+                    }
+                }
 
                 ($existing ?? new Service)->fill($payload)->save();
 
@@ -101,7 +124,7 @@ final class NpmSync
         $scope = $this->scopeOf($usable[0], $service, $id);
 
         // Nothing matched yet: the same app under the other domain (wiki.<local> vs wiki.<public>) belongs to the same service.
-        if ($service === null && Domains::scope($usable[0]) !== null) {
+        if ($service === null && $this->zone->scopeOf($usable[0]) !== null) {
             $label = Domains::label($usable[0]);
             $service = $services->first(fn (Service $s) => ($scope === 'public' ? ($s->public_domain === null && $s->npm_public_host_id === null) : ($s->domain === null && $s->npm_host_id === null))
                 && (($s->domain && Domains::label($s->domain) === $label) || ($s->public_domain && Domains::label($s->public_domain) === $label) || mb_strtolower($s->name) === $label));
@@ -190,7 +213,7 @@ final class NpmSync
         $hosts = collect($this->client->proxyHosts());
         $items = [];
 
-        $services = Service::with('server')->where(fn ($q) => $q->whereNotNull('domain')->orWhereNotNull('public_domain'))
+        $services = Zones::servicesIn($this->zone)->with('server')->where(fn ($q) => $q->whereNotNull('domain')->orWhereNotNull('public_domain'))
             ->when($only !== null, fn ($q) => $q->whereIn('id', $only))->orderBy('name')->get();
 
         foreach ($services as $service) {
@@ -266,7 +289,7 @@ final class NpmSync
 
         if ($host === null) {
             // The certificate chosen for this kind of domain (Domains on the NPM page), so a new host is not left without SSL.
-            $cert = (int) Settings::get('npm_cert_'.$scope);
+            $cert = $this->certFor($scope);
             $payload = $desired + [
                 'domain_names' => [$domain],
                 'certificate_id' => $cert, 'ssl_forced' => $cert > 0, 'http2_support' => $cert > 0, 'hsts_enabled' => false, 'hsts_subdomains' => false,
@@ -303,7 +326,7 @@ final class NpmSync
         }
 
         // The certificate chosen for this kind of domain is the one the host should use.
-        $cert = (int) Settings::get('npm_cert_'.$scope);
+        $cert = $this->certFor($scope);
         $currentCert = (int) ($host['certificate_id'] ?? 0);
         if ($cert > 0 && $currentCert !== $cert) {
             $payload['certificate_id'] = $cert;
@@ -390,7 +413,16 @@ final class NpmSync
             }
         }
 
-        return Domains::scope($domain) ?? 'local';
+        return $this->zone->scopeOf($domain) ?? 'local';
+    }
+
+    /**
+     * The NPM certificate id new and existing hosts of this kind of domain should use (0 = none). Only the default
+     * zone has one so far (the two choices on the NPM page); other zones get theirs with the certificate policies.
+     */
+    private function certFor(string $scope): int
+    {
+        return $this->zone->is_default ? (int) Settings::get('npm_cert_'.$scope) : 0;
     }
 
     private function storedPort(string $scheme, int $port): ?int
