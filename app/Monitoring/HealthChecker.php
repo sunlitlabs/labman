@@ -160,6 +160,7 @@ class HealthChecker
                     ->withoutRedirecting()
                     ->withOptions([
                         'verify' => $verify,
+                        'curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4], // IPv4 only: a broken IPv6 route must not turn a service yellow
                         'on_stats' => function (TransferStats $stats) use (&$times, $key) {
                             $times[$key] = $stats->getTransferTime();
                         },

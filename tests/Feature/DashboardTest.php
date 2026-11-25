@@ -126,6 +126,14 @@ class DashboardTest extends TestCase
         $this->get('/')->assertOk()->assertSee('data-dot="name" data-dot-state="down"', false)->assertSee('data-dot="backend" data-dot-state="up"', false);
     }
 
+    public function test_tcp_checks_connect_over_ipv4_only(): void
+    {
+        $this->assertSame('192.0.2.5', \App\Monitoring\TcpProbe::ipv4('192.0.2.5'));
+        $this->assertSame('127.0.0.1', \App\Monitoring\TcpProbe::ipv4('localhost'));
+        $this->assertSame('2001:db8::1', \App\Monitoring\TcpProbe::ipv4('[2001:db8::1]'), 'a typed IPv6 literal is kept');
+        $this->assertNull(\App\Monitoring\TcpProbe::ipv4('no-such-host.invalid'));
+    }
+
     public function test_a_single_kind_needs_no_tabs(): void
     {
         $this->actingAs($this->admin());

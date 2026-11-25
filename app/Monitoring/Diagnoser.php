@@ -86,7 +86,7 @@ final class Diagnoser
                     ->withUserAgent('LabMan/1.0 (diagnose)')
                     ->withHeaders($job['host'] ? ['Host' => $job['host']] : [])
                     ->timeout($timeout)->connectTimeout($timeout)->withoutRedirecting()
-                    ->withOptions(['verify' => false, 'on_stats' => function (TransferStats $s) use (&$times, $key) {
+                    ->withOptions(['verify' => false, 'curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4], 'on_stats' => function (TransferStats $s) use (&$times, $key) {
                         $times[$key] = $s->getTransferTime();
                     }])
                     ->get($job['scheme'].'://'.Hosts::forUrl($address).':'.$job['port'].$job['path']);

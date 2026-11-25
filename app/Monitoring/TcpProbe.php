@@ -23,6 +23,18 @@ final class TcpProbe
         112 => 'host is down',
     ];
 
+    /** The IPv4 address to connect to: the host itself when it is an address (v6 literals are kept as typed), else its first A record. */
+    public static function ipv4(string $host): ?string
+    {
+        $bare = trim($host, '[]');
+        if (filter_var($bare, FILTER_VALIDATE_IP) !== false) {
+            return $bare;
+        }
+        $all = @gethostbynamel($bare);
+
+        return $all ? $all[0] : null;
+    }
+
     /**
      * @param  array<string|int, array{0: string, 1: int, 2: string}>  $targets  key => [host, port, label]
      * @return array<string|int, CheckResult>
@@ -37,8 +49,16 @@ final class TcpProbe
             $start = microtime(true);
             $errno = 0;
             $errstr = '';
+            // IPv4 only: a name that also has an AAAA record must not be tried over a broken IPv6 route.
+            $ip = self::ipv4($host);
+            if ($ip === null) {
+                $results[$key] = new CheckResult($label, false, self::elapsed($start), 'could not resolve host');
+
+                continue;
+            }
+
             $sock = @stream_socket_client(
-                'tcp://'.Hosts::forUrl($host).':'.$port,
+                'tcp://'.Hosts::forUrl($ip).':'.$port,
                 $errno,
                 $errstr,
                 $timeout,

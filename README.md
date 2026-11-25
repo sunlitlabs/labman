@@ -247,6 +247,8 @@ The Semaphore token acts as its Semaphore user, so use a dedicated user that can
 
 Checks run in the background, never when a page loads. `php artisan labman:monitor` is a resident loop started by the container entrypoint (and restarted if it exits); it re-reads the settings every round, so changing the interval needs no restart. Results are stored in the database; the pages render what is stored and the browser polls a small JSON endpoint (`/status`) every interval.
 
+Checks use **IPv4 only**: names are resolved to their A record, so a host with a broken or missing IPv6 route is not reported as degraded. (An address you typed as an IPv6 literal is still used as typed for TCP checks.)
+
 - **Server**: a TCP connect to the SSH port (default 22, switch off with `check_ssh: false`) plus each extra port. `up` = all connect, `degraded` = some, `down` = none, `unknown` = not checked yet.
 - **Service**: it is **up when any check passes**:
   - the web check: an HTTP(S) GET to `scheme://address:port/health_path` (`health_path` falls back to `path`), healthy when the status is inside `expect` (default `200-499`, i.e. anything but a server error: login pages answering 401 and API-only apps answering 404 on `/` are running). `expect` takes a list, e.g. `200-399,401`. Backend TLS is **not** verified and redirects are **not** followed. For a service with a domain the request is also sent with `Host: <domain>`, which is what name-based reverse proxies and apps such as Nextcloud need;
