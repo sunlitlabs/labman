@@ -35,6 +35,14 @@ class AdguardTest extends TestCase
 
     private int $failAdds = 0;
 
+    private ?int $addStatus = null;
+
+    /** @var int|null when set, /control/rewrite/update answers with this status (404 = an old AdGuard Home) */
+    private ?int $updateStatus = null;
+
+    /** @var list<array<string, mixed>> the JSON bodies sent to the update endpoint */
+    private array $updateBodies = [];
+
     private string $adminToken;
 
     protected function setUp(): void
@@ -64,8 +72,8 @@ class AdguardTest extends TestCase
             return match ($path) {
                 '/control/status' => Http::response(['version' => 'v0.107.50', 'running' => true]),
                 '/control/rewrite/list' => Http::response($this->rewrites),
-                '/control/rewrite/add' => $this->add($body),
-                '/control/rewrite/update' => $this->change($body),
+                '/control/rewrite/add' => $request->method() === 'POST' ? $this->add($body) : Http::response('only method POST is allowed', 405),
+                '/control/rewrite/update' => $request->method() === 'PUT' ? $this->change($body) : Http::response('only method PUT is allowed', 405),
                 default => Http::response('not found', 404),
             };
         });
@@ -73,6 +81,9 @@ class AdguardTest extends TestCase
 
     private function add(array $b)
     {
+        if ($this->addStatus !== null) {
+            return Http::response('only method PUT is allowed', $this->addStatus);
+        }
         if ($this->failAdds > 0) {
             $this->failAdds--;
 
@@ -85,6 +96,10 @@ class AdguardTest extends TestCase
 
     private function change(array $b)
     {
+        $this->updateBodies[] = $b;
+        if ($this->updateStatus !== null) {
+            return Http::response('not found', $this->updateStatus);
+        }
         foreach ($this->rewrites as $i => $r) {
             if ($r['domain'] === $b['target']['domain'] && $r['answer'] === $b['target']['answer']) {
                 $this->rewrites[$i] = $b['update'];
@@ -243,7 +258,7 @@ class AdguardTest extends TestCase
 
         $this->assertSame(1, $result['applied']);
         $this->assertSame([['domain' => 'nas.home.example.com', 'answer' => '192.0.2.20']], $this->rewrites);
-        $this->assertContains('POST /control/rewrite/update', $this->calls);
+        $this->assertContains('PUT /control/rewrite/update', $this->calls);
         $this->assertNotContains('POST /control/rewrite/add', $this->calls);
     }
 
@@ -298,6 +313,76 @@ class AdguardTest extends TestCase
         $this->assertSame(1, $result['applied']);
         $this->assertContains('failed', array_column($result['results'], 'outcome'));
         $this->assertCount(1, $this->rewrites);
+    }
+
+    public function test_an_update_is_a_put_with_the_rewrite_as_adguard_holds_it_as_target(): void
+    {
+        $this->connect();
+        $this->rewrites = [['domain' => 'Nas.Home.Example.com', 'answer' => '192.0.2.77']];
+        $sync = new AdguardSync(AdguardClient::fromStored());
+
+        $result = $sync->apply($this->selection($sync->plan()['items'], 'nas.home.example.com|A'));
+
+        $this->assertSame(1, $result['applied'], json_encode($result));
+        $this->assertContains('PUT /control/rewrite/update', $this->calls);
+        $this->assertNotContains('POST /control/rewrite/update', $this->calls);
+        $this->assertSame([[
+            'target' => ['domain' => 'Nas.Home.Example.com', 'answer' => '192.0.2.77'],
+            'update' => ['domain' => 'nas.home.example.com', 'answer' => '192.0.2.20'],
+        ]], $this->updateBodies);
+        $this->assertSame([['domain' => 'nas.home.example.com', 'answer' => '192.0.2.20']], $this->rewrites);
+    }
+
+    public function test_an_adguard_without_the_update_endpoint_leaves_the_rewrite_alone_and_says_what_to_do(): void
+    {
+        $this->connect();
+        $this->rewrites = [['domain' => 'nas.home.example.com', 'answer' => '192.0.2.77']];
+        $this->updateStatus = 404;
+        $sync = new AdguardSync(AdguardClient::fromStored());
+
+        $result = $sync->apply($this->selection($sync->plan()['items'], 'nas.home.example.com|A'));
+
+        $this->assertSame(0, $result['applied']);
+        $this->assertSame('failed', $result['results'][0]['outcome']);
+        $this->assertStringContainsString('by hand', $result['results'][0]['message']);
+        $this->assertStringContainsString('PUT /control/rewrite/update', $result['results'][0]['message']);
+        $this->assertSame([['domain' => 'nas.home.example.com', 'answer' => '192.0.2.77']], $this->rewrites, 'nothing was deleted or added');
+        $this->assertNotContains('POST /control/rewrite/delete', $this->calls);
+        $this->assertNotContains('POST /control/rewrite/add', $this->calls);
+    }
+
+    public function test_a_failing_update_does_not_stop_the_creates_and_each_item_is_reported(): void
+    {
+        $this->connect();
+        $this->rewrites = [['domain' => 'nas.home.example.com', 'answer' => '192.0.2.77'], ['domain' => 'unrelated.example.me', 'answer' => '192.0.2.99']];
+        $this->updateStatus = 500;
+        $sync = new AdguardSync(AdguardClient::fromStored());
+        $selection = $this->selection($sync->plan()['items'], 'nas.home.example.com|A', '*.home.example.com|A');
+
+        $result = $sync->apply($selection);
+        $byKey = array_column($result['results'], 'outcome', 'key');
+
+        $this->assertSame(1, $result['applied']);
+        $this->assertSame('failed', $byKey['nas.home.example.com|A']);
+        $this->assertSame('created', $byKey['*.home.example.com|A']);
+        $this->assertContains(['domain' => '*.home.example.com', 'answer' => '192.0.2.5'], $this->rewrites);
+        $this->assertContains(['domain' => 'unrelated.example.me', 'answer' => '192.0.2.99'], $this->rewrites, 'rewrites LabMan has no record for are untouched');
+    }
+
+    public function test_a_405_names_the_request_that_was_refused(): void
+    {
+        $this->connect();
+        $this->addStatus = 405;
+
+        try {
+            AdguardClient::fromStored()->add('nas.home.example.com', '192.0.2.20');
+            $this->fail('expected a failure');
+        } catch (AdguardException $e) {
+            $this->assertStringContainsString('POST /control/rewrite/add', $e->getMessage());
+            $this->assertStringContainsString('405', $e->getMessage());
+            $this->assertStringContainsString('by hand', $e->getMessage());
+            $this->assertStringNotContainsString('hunter2-test', $e->getMessage());
+        }
     }
 
     public function test_the_client_has_no_way_to_delete(): void

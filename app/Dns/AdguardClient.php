@@ -35,7 +35,7 @@ final class AdguardClient
         return is_array($status) && is_string($status['version'] ?? null) ? $status['version'] : 'unknown';
     }
 
-    /** @return list<array{domain: string, answer: string}> */
+    /** @return list<array{domain: string, answer: string, raw: string}> `domain` is lower-cased for matching; `raw` is the domain exactly as AdGuard holds it */
     public function rewrites(): array
     {
         $rows = $this->send('get', '/control/rewrite/list')->json();
@@ -43,7 +43,7 @@ final class AdguardClient
 
         foreach (is_array($rows) ? $rows : [] as $row) {
             if (is_array($row) && is_string($row['domain'] ?? null) && is_string($row['answer'] ?? null)) {
-                $out[] = ['domain' => mb_strtolower($row['domain']), 'answer' => $row['answer']];
+                $out[] = ['domain' => mb_strtolower($row['domain']), 'answer' => $row['answer'], 'raw' => $row['domain']];
             }
         }
 
@@ -55,13 +55,25 @@ final class AdguardClient
         $this->send('post', '/control/rewrite/add', ['domain' => $domain, 'answer' => $answer]);
     }
 
-    /** Change the answer of an existing rewrite (needs AdGuard Home 0.107.30 or newer). */
-    public function change(string $domain, string $oldAnswer, string $newAnswer): void
+    /**
+     * Change an existing rewrite in place. AdGuard Home takes this as a PUT whose `target` is the rewrite exactly as it
+     * holds it now and whose `update` is the new value. Versions without this endpoint are not worked around by deleting
+     * and re-adding: LabMan has no delete, so the admin is told to edit that rewrite by hand.
+     */
+    public function change(string $targetDomain, string $targetAnswer, string $newDomain, string $newAnswer): void
     {
-        $this->send('post', '/control/rewrite/update', [
-            'target' => ['domain' => $domain, 'answer' => $oldAnswer],
-            'update' => ['domain' => $domain, 'answer' => $newAnswer],
-        ]);
+        try {
+            $this->send('put', '/control/rewrite/update', [
+                'target' => ['domain' => $targetDomain, 'answer' => $targetAnswer],
+                'update' => ['domain' => $newDomain, 'answer' => $newAnswer],
+            ]);
+        } catch (AdguardException $e) {
+            if ($e->status === 404) {
+                throw new AdguardException("This AdGuard Home version has no rewrite update (PUT /control/rewrite/update answered 404), so {$targetDomain} was left as it is. LabMan never deletes rewrites: change {$targetDomain} to {$newAnswer} by hand in AdGuard Home (Filters > DNS rewrites), or upgrade AdGuard Home, then run the preview again.", 404);
+            }
+
+            throw $e;
+        }
     }
 
     /** @param array<string, mixed>|null $body */
@@ -90,10 +102,13 @@ final class AdguardClient
 
         $detail = trim(mb_substr((string) $response->body(), 0, 200));
 
+        $what = strtoupper($method).' '.$path;
+
         throw new AdguardException(match (true) {
             $response->status() === 401, $response->status() === 403 => 'AdGuard Home rejected the login (wrong user name or password).',
-            $response->status() === 404 => 'AdGuard Home answered 404 for '.$path.'. Is this the AdGuard Home address, and a version that supports it?',
-            default => "AdGuard Home answered HTTP {$response->status()} for {$path}".($detail !== '' ? ": {$detail}" : '.'),
-        });
+            $response->status() === 404 => "AdGuard Home answered 404 for {$what}. Is this the AdGuard Home address, and a version that supports it?",
+            $response->status() === 405 => "AdGuard Home refused the request {$what} (HTTP 405".($detail !== '' ? ": {$detail}" : '').'). This LabMan and this AdGuard Home version disagree on how that call is made: upgrade LabMan, or make this change by hand in AdGuard Home.',
+            default => "AdGuard Home answered HTTP {$response->status()} for {$what}".($detail !== '' ? ": {$detail}" : '.'),
+        }, $response->status());
     }
 }

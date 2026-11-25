@@ -33,8 +33,10 @@ final class AdguardSync
         }
 
         $byDomain = [];
+        $rawOf = [];
         foreach ($existing as $row) {
             $byDomain[$row['domain']][] = $row['answer'];
+            $rawOf[$row['domain']] = $row['raw'];
         }
 
         $items = [];
@@ -63,7 +65,7 @@ final class AdguardSync
             } elseif ($sameType === []) {
                 $items[] = $this->finish($base + ['action' => 'create', 'changes' => [['field' => $r['type'], 'from' => null, 'to' => $r['value']]], 'data' => ['domain' => $domain, 'answer' => $r['value']]]);
             } elseif (count($sameType) === 1) {
-                $items[] = $this->finish($base + ['action' => 'update', 'changes' => [['field' => $r['type'], 'from' => $sameType[0], 'to' => $r['value']]], 'data' => ['domain' => $domain, 'answer' => $r['value'], 'old' => $sameType[0]]]);
+                $items[] = $this->finish($base + ['action' => 'update', 'changes' => [['field' => $r['type'], 'from' => $sameType[0], 'to' => $r['value']]], 'data' => ['domain' => $domain, 'answer' => $r['value'], 'old' => $sameType[0], 'old_domain' => $rawOf[$domain] ?? $domain]]);
             } else {
                 $base['errors'][] = 'AdGuard has '.count($sameType).' '.$r['type'].' rewrites for this name ('.implode(', ', $sameType).'). Remove the extra ones in AdGuard Home, then run the preview again.';
                 $items[] = $this->finish($base + ['action' => 'skip', 'changes' => [], 'data' => ['domain' => $domain, 'answer' => $r['value']]]);
@@ -114,7 +116,7 @@ final class AdguardSync
                     $this->client->add($d['domain'], $d['answer']);
                     $message = "Added {$d['domain']} → {$d['answer']}.";
                 } else {
-                    $this->client->change($d['domain'], $d['old'], $d['answer']);
+                    $this->client->change($d['old_domain'], $d['old'], $d['domain'], $d['answer']);
                     $message = "Changed {$d['domain']} from {$d['old']} to {$d['answer']}.";
                 }
                 $applied++;
