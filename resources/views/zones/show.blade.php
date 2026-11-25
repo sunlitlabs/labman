@@ -11,6 +11,11 @@
         <a class="btn" href="{{ route('zones.edit', $z) }}">Edit zone</a>
         @if ($card['connected'])
             <a class="btn" href="{{ route('npm.index', ['zone' => $z->id]) }}">Its proxy</a>
+            <a class="btn" href="{{ route('npm.index', ['zone' => $z->id]) }}#connect">Edit proxy connection</a>
+            <form method="POST" action="{{ route('npm.disconnect', ['zone' => $z->id]) }}" class="inline-form">
+                @csrf @method('DELETE')
+                <button class="btn-danger" type="submit" data-confirm>Disconnect proxy</button>
+            </form>
             <form method="POST" action="{{ route('zones.refresh.one', $z) }}" class="inline-form">
                 @csrf
                 <button class="btn" type="submit" data-busy="Asking the proxy…">Refresh status</button>

@@ -80,6 +80,26 @@ class ZonesUiTest extends TestCase
         $this->assertSame('none', ZoneStatus::cached($this->external)['state'], 'a zone with no proxy has nothing to check');
     }
 
+    public function test_every_proxy_can_be_edited_and_disconnected_from_where_it_is_listed(): void
+    {
+        $this->connect($this->internal, FakeNpm::URL);
+        $this->connect($this->external, self::URL_OUTER);
+        $edit = route('npm.index', ['zone' => $this->external->id]).'#connect';
+        $disconnect = route('npm.disconnect', ['zone' => $this->external->id]);
+
+        foreach ([route('npm.index'), route('zones.index'), route('zones.show', $this->external)] as $page) {
+            $this->get($page)->assertOk()->assertSee('Edit', false)->assertSee(str_replace('&', '&amp;', $edit), false);
+        }
+        foreach ([route('npm.index'), route('zones.show', $this->external)] as $page) {
+            $this->get($page)->assertSee($disconnect, false);
+        }
+
+        $this->delete($disconnect)->assertRedirect();
+        $this->assertFalse(Connection::exists($this->external));
+        $this->assertTrue(Connection::exists($this->internal));
+        $this->get(route('npm.index'))->assertSee('Connect', false);
+    }
+
     public function test_an_unreachable_proxy_degrades_only_its_own_card(): void
     {
         $this->connect($this->internal, FakeNpm::URL);

@@ -32,6 +32,15 @@
                                 <small>NPM {{ $p['version'] }} · {{ $p['hosts'] }} host(s)</small>
                             @endif
                         </div>
+                        <div class="cell actions">
+                            <a class="btn" href="{{ route('npm.index', ['zone' => $z->id]) }}#connect">{{ $p['state'] === 'none' ? 'Connect' : 'Edit connection' }}</a>
+                            @if ($p['state'] !== 'none')
+                                <form method="POST" action="{{ route('npm.disconnect', ['zone' => $z->id]) }}" class="inline-form">
+                                    @csrf @method('DELETE')
+                                    <button class="btn-danger" type="submit" data-confirm>Disconnect</button>
+                                </form>
+                            @endif
+                        </div>
                         <div class="cell">
                             @if ($p['state'] === 'ok')
                                 <small>{{ $p['unknown_to_labman'] }} in NPM that LabMan does not know · {{ $p['to_push'] }} LabMan change(s) to send · certificates: {{ $p['cert_ok'] + $p['cert_expiring'] }} covered{{ $p['cert_expiring'] ? ', '.$p['cert_expiring'].' expiring' : '' }}{{ $p['cert_problems'] ? ', '.$p['cert_problems'].' to fix' : '' }}</small>
