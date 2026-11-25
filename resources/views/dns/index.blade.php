@@ -14,6 +14,7 @@
         @foreach ($formats as $key => $label)
             <a class="btn" href="{{ route('dns.export', ['format' => $key]) }}">{{ $label }}</a>
         @endforeach
+        <a class="btn" href="{{ route('dns.adguard') }}">AdGuard Home</a>
     </div>
 
     @php($records = collect($plan['records']))

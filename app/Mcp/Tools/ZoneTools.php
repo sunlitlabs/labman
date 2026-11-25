@@ -315,7 +315,7 @@ final class ZoneTools
                     return ['forgotten' => $m->domain, 'note' => 'Nothing was changed in NPM.'];
                 }),
 
-            new Tool('dns_plan', 'The DNS plan', 'Read-only; LabMan never writes DNS. The records the zones need, per resolver (inside = your network, public = your provider): a wildcard per zone domain pointing at the zone\'s proxy (or its public address), a record per server at its own address, explicit records for service names a wildcard does not cover, and each mirror\'s name answered inside by the mirroring zone\'s proxy. Conflicts are listed, never guessed: collisions need an owner (dns_set_owner). format json (default) | text | hosts | adguard.',
+            new Tool('dns_plan', 'The DNS plan', 'Read-only (the adguard_* tools write the inside records to AdGuard Home after a preview). The records the zones need, per resolver (inside = your network, public = your provider): a wildcard per zone domain pointing at the zone\'s proxy (or its public address), a record per server at its own address, explicit records for service names a wildcard does not cover, and each mirror\'s name answered inside by the mirroring zone\'s proxy. Conflicts are listed, never guessed: collisions need an owner (dns_set_owner). format json (default) | text | hosts | adguard.',
                 ['format' => Tool::str('json (default), text, hosts or adguard.', ['json', 'text', 'hosts', 'adguard'])], [], 'admin', true, false,
                 function (array $a) {
                     $plan = DnsPlan::build();
