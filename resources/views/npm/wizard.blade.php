@@ -33,7 +33,7 @@
                 <strong>{{ $counts['in_sync'] }}</strong> already match,
                 <strong>{{ $actionable->count() }}</strong> {{ $actionable->count() === 1 ? 'needs' : 'need' }} a look{{ $counts['skipped'] ? ', '.$counts['skipped'].' cannot be used' : '' }}.
             @endif
-            The ticked defaults only ever change LabMan, and you can still change any of them. LabMan never deletes anything in NPM.
+            The ticked defaults only ever change LabMan, and you can still change any of them. The guided sync never deletes anything in NPM.
         </p>
     @endif
 

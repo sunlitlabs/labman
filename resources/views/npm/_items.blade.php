@@ -2,7 +2,7 @@
 <div class="rows plan">
     @foreach ($items as $item)
         @php($blocked = ! empty($item['errors']))
-        @php($can = in_array($item['action'], ['create', 'update']) && ! $blocked)
+        @php($can = in_array($item['action'], ['create', 'update', 'delete']) && ! $blocked)
         <div class="plan-item plan-{{ $item['action'] }}">
             <div class="plan-head">
                 @if ($can)
@@ -14,8 +14,8 @@
                 @else
                     <strong>{{ $item['title'] }}</strong>
                 @endif
-                <span class="pill pill-{{ $blocked ? 'down' : ['create' => 'degraded', 'update' => 'degraded', 'unchanged' => 'up', 'skip' => 'unknown', 'orphan' => 'down'][$item['action']] }}">
-                    {{ $blocked ? 'blocked' : ['create' => $isImport ? 'new service' : 'new proxy host', 'update' => 'update', 'unchanged' => 'in sync', 'skip' => 'skipped', 'orphan' => 'orphaned'][$item['action']] }}
+                <span class="pill pill-{{ $blocked ? 'down' : ['create' => 'degraded', 'update' => 'degraded', 'unchanged' => 'up', 'skip' => 'unknown', 'orphan' => 'down', 'delete' => 'down'][$item['action']] }}">
+                    {{ $blocked ? 'blocked' : ['create' => $isImport ? 'new service' : 'new proxy host', 'update' => 'update', 'unchanged' => 'in sync', 'skip' => 'skipped', 'orphan' => 'orphaned', 'delete' => 'delete from NPM'][$item['action']] }}
                 </span>
             </div>
             <p class="plan-plain">{{ \App\Npm\PlanText::describe($item, $zoneName ?? 'Nginx Proxy Manager', $isImport) }}</p>

@@ -35,6 +35,9 @@ class AdguardTest extends TestCase
 
     private int $failAdds = 0;
 
+    /** @var list<array<string, mixed>> the JSON bodies sent to the delete endpoint */
+    private array $deleteBodies = [];
+
     private ?int $addStatus = null;
 
     /** @var int|null when set, /control/rewrite/update answers with this status (404 = an old AdGuard Home) */
@@ -73,6 +76,7 @@ class AdguardTest extends TestCase
                 '/control/status' => Http::response(['version' => 'v0.107.50', 'running' => true]),
                 '/control/rewrite/list' => Http::response($this->rewrites),
                 '/control/rewrite/add' => $request->method() === 'POST' ? $this->add($body) : Http::response('only method POST is allowed', 405),
+                '/control/rewrite/delete' => $request->method() === 'POST' ? $this->remove($body) : Http::response('only method POST is allowed', 405),
                 '/control/rewrite/update' => $request->method() === 'PUT' ? $this->change($body) : Http::response('only method PUT is allowed', 405),
                 default => Http::response('not found', 404),
             };
@@ -90,6 +94,14 @@ class AdguardTest extends TestCase
             return Http::response('rewrite already exists', 400);
         }
         $this->rewrites[] = ['domain' => $b['domain'], 'answer' => $b['answer']];
+
+        return Http::response('');
+    }
+
+    private function remove(array $b)
+    {
+        $this->deleteBodies[] = $b;
+        $this->rewrites = array_values(array_filter($this->rewrites, fn ($r) => ! ($r['domain'] === $b['domain'] && $r['answer'] === $b['answer'])));
 
         return Http::response('');
     }
@@ -385,10 +397,61 @@ class AdguardTest extends TestCase
         }
     }
 
-    public function test_the_client_has_no_way_to_delete(): void
+    public function test_only_a_rewrite_labman_wrote_is_ever_offered_for_deletion(): void
     {
-        $this->assertFalse(method_exists(AdguardClient::class, 'delete'));
-        $this->assertFalse(method_exists(AdguardClient::class, 'remove'));
+        $this->connect();
+        // One rewrite written by someone else for a name the plan does not mention, one written by LabMan earlier.
+        $this->rewrites = [['domain' => 'theirs.example.me', 'answer' => '192.0.2.88'], ['domain' => 'old.home.example.com', 'answer' => '192.0.2.66']];
+        \App\Models\ManagedRewrite::create(['domain' => 'old.home.example.com', 'answer' => '192.0.2.66']);
+
+        $plan = (new AdguardSync(AdguardClient::fromStored()))->plan();
+        $deletes = array_values(array_filter($plan['items'], fn ($i) => $i['action'] === 'delete'));
+
+        $this->assertSame(['delete|old.home.example.com|192.0.2.66'], array_column($deletes, 'key'));
+        $this->assertSame(1, $plan['others'], "the other person's rewrite is only counted");
+        $this->assertNotContains('POST /control/rewrite/delete', $this->calls, 'a preview deletes nothing');
+    }
+
+    public function test_a_ticked_delete_removes_exactly_that_rewrite_and_stops_tracking_it(): void
+    {
+        $this->connect();
+        $this->rewrites = [['domain' => 'theirs.example.me', 'answer' => '192.0.2.88'], ['domain' => 'old.home.example.com', 'answer' => '192.0.2.66']];
+        \App\Models\ManagedRewrite::create(['domain' => 'old.home.example.com', 'answer' => '192.0.2.66']);
+        $sync = new AdguardSync(AdguardClient::fromStored());
+
+        $result = $sync->apply($this->selection($sync->plan()['items'], 'delete|old.home.example.com|192.0.2.66'));
+
+        $this->assertSame(1, $result['applied']);
+        $this->assertSame('deleted', $result['results'][0]['outcome']);
+        $this->assertSame([['domain' => 'theirs.example.me', 'answer' => '192.0.2.88']], $this->rewrites);
+        $this->assertSame(0, \App\Models\ManagedRewrite::count());
+        $this->assertSame([['domain' => 'old.home.example.com', 'answer' => '192.0.2.66']], $this->deleteBodies);
+    }
+
+    public function test_rewrites_added_or_changed_by_labman_become_its_own_and_a_delete_cannot_name_anything_else(): void
+    {
+        $this->connect();
+        $this->rewrites = [['domain' => 'nas.home.example.com', 'answer' => '192.0.2.77']];
+        $sync = new AdguardSync(AdguardClient::fromStored());
+        $sync->apply($this->selection($sync->plan()['items'], '*.home.example.com|A', 'nas.home.example.com|A'));
+
+        $this->assertEqualsCanonicalizing([['*.home.example.com', '192.0.2.5'], ['nas.home.example.com', '192.0.2.20']], \App\Models\ManagedRewrite::query()->get()->map(fn ($m) => [$m->domain, $m->answer])->all());
+
+        // A forged key for a rewrite LabMan never wrote is refused.
+        $this->rewrites[] = ['domain' => 'theirs.example.me', 'answer' => '192.0.2.88'];
+        $this->expectException(AdguardException::class);
+        $sync->apply(['delete|theirs.example.me|192.0.2.88' => str_repeat('a', 40)]);
+    }
+
+    public function test_the_automatic_and_default_paths_never_tick_a_delete(): void
+    {
+        $this->connect();
+        $this->rewrites = [['domain' => 'old.home.example.com', 'answer' => '192.0.2.66']];
+        \App\Models\ManagedRewrite::create(['domain' => 'old.home.example.com', 'answer' => '192.0.2.66']);
+
+        $html = $this->get(route('dns.adguard.preview'))->assertOk()->assertSee('delete')->getContent();
+
+        $this->assertDoesNotMatchRegularExpression('/name="apply\[\]" value="delete[^"]*" checked/', $html);
     }
 
     // ------------------------------------------------------------------------- MCP

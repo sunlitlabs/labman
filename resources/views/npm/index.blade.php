@@ -6,7 +6,7 @@
     <h1>Nginx Proxy Manager</h1>
     <p class="muted">
         Import proxy hosts as services, or push LabMan's services back to NPM. Every change is previewed first and
-        nothing is written until you tick it. LabMan never deletes anything in NPM.
+        nothing is written until you tick it. LabMan deletes in NPM only a proxy host it created itself that nothing asks for any more, and only when you tick it.
         Each zone has its own proxy: open one to see its status, certificates and domains, or edit how LabMan connects to it.
     </p>
 
@@ -82,7 +82,7 @@
             <label class="check">
                 <input type="checkbox" name="auto" value="1" @checked($auto) data-autosubmit-form>
                 <span>Update NPM automatically when something changes here
-                    <span class="hint">LabMan is the source of truth: when a service, its server's address, or a certificate changes, the matching proxy host is updated (or created) in the zone's NPM. LabMan never deletes anything in NPM.</span></span>
+                    <span class="hint">LabMan is the source of truth: when a service, its server's address, or a certificate changes, the matching proxy host is updated (or created) in the zone's NPM. Automatic updates never delete anything.</span></span>
             </label>
             <div class="savebar"><button class="primary" type="submit">Save</button></div>
         </form>

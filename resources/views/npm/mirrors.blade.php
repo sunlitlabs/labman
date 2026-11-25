@@ -12,7 +12,7 @@
         A mirror is an entry in one zone's proxy that forwards to another zone's proxy for a name that zone publishes, so people
         inside can use the same name without going out and back. Turn them on per zone (<strong>Admin &gt; Zones &gt; edit &gt; Mirrors</strong>)
         or per service (<strong>Also publish in</strong> on the service form). Nothing is created until you apply a previewed push.
-        LabMan never deletes anything in NPM: a mirror nothing asks for any more is listed here as orphaned, to remove by hand.
+        A mirror nothing asks for any more is listed here as orphaned. Preview a push for its proxy to delete it from NPM (only a mirror LabMan made, and only when you tick it), or forget it here if it is already gone.
     </p>
 
     @forelse ($sections as $s)
@@ -45,7 +45,7 @@
 
             @if ($s['orphans']->isNotEmpty())
                 <h3>Orphaned</h3>
-                <p class="muted">Nothing asks for these any more. Remove the proxy host in NPM yourself, then forget it here.</p>
+                <p class="muted">Nothing asks for these any more. Delete them from NPM with a push preview, or forget one here if its proxy host is already gone.</p>
                 <div class="rows">
                     @foreach ($s['orphans'] as $o)
                         <article class="row">

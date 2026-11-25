@@ -19,7 +19,10 @@ final class PlanText
         $title = (string) $item['title'];
 
         if (($item['action'] ?? '') === 'orphan') {
-            return "{$title}: nothing asks for it any more. Remove it in NPM yourself (LabMan never deletes there).";
+            return "{$title}: nothing asks for it any more, and it is no longer in NPM as LabMan made it, so LabMan will not delete it. Remove it in NPM yourself if it is still there, then forget it here.";
+        }
+        if (($item['action'] ?? '') === 'delete') {
+            return "Delete proxy host #{$data['host_id']} ({$data['domain']}) from the {$proxy} proxy. LabMan created it and nothing asks for it any more. This cannot be undone from LabMan.";
         }
         if (($item['action'] ?? '') === 'unchanged') {
             return "{$title} already matches.";

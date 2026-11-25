@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Http;
 
 /**
  * A minimal client for the Nginx Proxy Manager REST API: log in, list proxy hosts,
- * update one, create one. It never deletes anything.
+ * update one, create one, delete one. Deleting is only reached from an applied, previewed item that LabMan itself
+ * created (see NpmSync).
  */
 final class NpmClient
 {
@@ -116,6 +117,12 @@ final class NpmClient
     public function createProxyHost(array $payload): array
     {
         return $this->authed('post', '/api/nginx/proxy-hosts', $payload)->json() ?? [];
+    }
+
+    /** Delete one proxy host. Callers reach this only for a host LabMan created, from an applied, previewed item. */
+    public function deleteProxyHost(int $id): void
+    {
+        $this->authed('delete', "/api/nginx/proxy-hosts/{$id}");
     }
 
     // --------------------------------------------------------------- internals

@@ -31,7 +31,7 @@ use Closure;
  * Zones over MCP: the zones themselves, who is in them, each zone's proxy (the NPM tools take a `zone` too), the
  * grouped preview, certificates, mirrors and the DNS plan. Everything here is admin-only, goes through the same
  * validation as the screens, and never returns a password or token. Writes to a proxy are always a preview and then an
- * apply of the items the user approved; LabMan never deletes anything in NPM.
+ * apply of the items the user approved; LabMan deletes in NPM only an approved item with action delete, a host it created itself.
  */
 final class ZoneTools
 {
@@ -210,7 +210,7 @@ final class ZoneTools
                     return ['mode' => $mode, 'sections' => $sections, 'next' => 'Show the user each section; then npm_apply_all with the items they approve ({zone, key, fingerprint}).'];
                 }),
 
-            new Tool('npm_apply_all', 'Apply previewed changes to several proxies', 'WRITES: applies the approved items of a grouped preview, each to its own zone\'s proxy (push writes to NPM and never deletes; import writes to LabMan only). One proxy failing does not stop the others, and an item that changed since the preview is refused for that zone only. Items with an error cannot be applied.',
+            new Tool('npm_apply_all', 'Apply previewed changes to several proxies', 'WRITES: applies the approved items of a grouped preview, each to its own zone\'s proxy (push writes to NPM and can delete only an item with action delete that the user approved; import writes to LabMan only). One proxy failing does not stop the others, and an item that changed since the preview is refused for that zone only. Items with an error cannot be applied.',
                 ['mode' => Tool::str('push (default) or import; the same as the preview.', ['push', 'import']), 'items' => $selection], ['items'], 'admin', false, true,
                 function (array $a, McpContext $ctx) {
                     $mode = ($a['mode'] ?? 'push') === 'import' ? 'import' : 'push';

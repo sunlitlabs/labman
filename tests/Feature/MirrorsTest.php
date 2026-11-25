@@ -336,7 +336,7 @@ class MirrorsTest extends TestCase
         $this->assertSame('203.0.113.9', array_values($this->inner->hosts)[0]['forward_host']);
     }
 
-    public function test_a_mirror_nothing_asks_for_is_orphaned_listed_and_never_deleted(): void
+    public function test_a_mirror_nothing_asks_for_is_offered_for_deletion_not_deleted_by_the_preview(): void
     {
         $this->applyMirror();
         $hostId = Mirror::first()->npm_host_id;
@@ -345,23 +345,36 @@ class MirrorsTest extends TestCase
         $this->blog->update(['public_domain' => 'journal.example.dev']);
         $plan = $this->sync()->pushPlan();
 
-        $orphan = collect($plan)->firstWhere('action', 'orphan');
+        $orphan = collect($plan)->firstWhere('action', 'delete');
         $this->assertStringContainsString('blog.example.dev', $orphan['title']);
-        $this->assertStringContainsString('never deletes anything in NPM', $orphan['warnings'][0]);
+        $this->assertStringContainsString('cannot be undone', $orphan['warnings'][0]);
+        $this->assertSame($hostId, $orphan['data']['host_id']);
+        $this->assertNotContains('DELETE', $this->inner->methods(), 'a preview deletes nothing');
         $this->assertSame('create', $this->mirror($plan)['action'], 'the wildcard covers the new name too');
         $this->assertStringContainsString('journal.example.dev', $this->mirror($plan)['title']);
     }
 
-    public function test_orphans_after_a_deleted_service_or_a_switched_off_rule_are_never_deleted_and_can_be_forgotten(): void
+    public function test_orphans_after_a_deleted_service_or_a_switched_off_rule_are_deleted_only_when_ticked_and_ours_and_can_be_forgotten(): void
     {
         $this->applyMirror();
         $record = Mirror::first();
 
         $this->internal->update(['mirror_sources' => null]);
         $plan = $this->sync()->pushPlan();
-        $this->assertSame(['orphan'], array_column($plan, 'action'));
-        $this->assertSame([], $this->sync()->applyPush($this->pick($plan))['results'], 'an orphan cannot be applied');
+        $this->assertSame(['delete'], array_column($plan, 'action'));
+        $this->assertSame([], $this->sync()->applyPush($this->pick($plan))['results'], 'a delete is never picked for you');
         $this->assertCount(1, $this->inner->hosts, 'the host is still there');
+        $this->assertNotContains('DELETE', $this->inner->methods());
+
+        // Edited in NPM so it is no longer the mirror LabMan made: not ours to delete any more.
+        $this->inner->hosts[$record->npm_host_id]['advanced_config'] = '';
+        $plan = $this->sync()->pushPlan();
+        $this->assertSame(['orphan'], array_column($plan, 'action'));
+        try {
+            $this->sync()->applyPush([$plan[0]['key'] => $plan[0]['fingerprint']]);
+            $this->fail('an orphan cannot be applied');
+        } catch (\App\Npm\NpmException) {
+        }
         $this->assertNotContains('DELETE', $this->inner->methods());
 
         $this->get(route('npm.mirrors'))->assertOk()->assertSee('Orphaned')->assertSee('blog.example.dev')->assertSee('Forget');
@@ -373,7 +386,24 @@ class MirrorsTest extends TestCase
         $this->mirrorOn();
         $this->sync()->applyPush($this->pick($this->sync()->pushPlan()));
         $this->blog->delete();
-        $this->assertSame('orphan', collect($this->sync()->pushPlan())->firstWhere('action', 'orphan')['action']);
+        $this->assertSame('delete', collect($this->sync()->pushPlan())->firstWhere('action', 'delete')['action']);
+    }
+
+    public function test_a_ticked_orphan_mirror_is_deleted_from_npm_and_forgotten(): void
+    {
+        $this->applyMirror();
+        $record = Mirror::first();
+        $this->internal->update(['mirror_sources' => null]);
+        $item = collect($this->sync()->pushPlan())->firstWhere('action', 'delete');
+
+        $result = $this->sync()->applyPush([$item['key'] => $item['fingerprint']]);
+
+        $this->assertSame(1, $result['applied']);
+        $this->assertStringContainsString('deleted from NPM', $result['results'][0]['message']);
+        $this->assertSame([], $this->inner->hosts);
+        $this->assertSame(0, Mirror::count());
+        $this->assertSame(['DELETE'], array_values(array_filter($this->inner->methods(), fn ($m) => $m === 'DELETE')));
+        $this->assertSame([], collect($this->sync()->pushPlan())->where('action', 'delete')->all());
     }
 
     public function test_an_existing_host_with_the_mirrored_name_is_taken_over_with_a_warning(): void

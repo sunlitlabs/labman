@@ -2,15 +2,18 @@
 
 namespace App\Dns;
 
+use App\Models\ManagedRewrite;
+
 /**
  * Compares the "inside" records of the DNS plan with the DNS rewrites in AdGuard Home, and applies the ones an
  * admin approved. Like the NPM push: a preview lists every change with a fingerprint, apply recomputes the plan and
- * refuses any item whose fingerprint no longer matches, and nothing is ever deleted. Rewrites LabMan has no record
- * for are left alone (only counted).
+ * refuses any item whose fingerprint no longer matches. Rewrites LabMan has no record of writing are left alone (only
+ * counted); a delete is offered only for a rewrite LabMan itself wrote that the plan no longer wants.
  *
  *   create     no rewrite of that name and type exists
  *   update     exactly one rewrite of that name and type exists with another answer: its answer is changed
  *   unchanged  the rewrite is already there
+ *   delete     a rewrite LabMan wrote that nothing in the plan asks for any more (never ticked by default)
  *   skip       cannot be decided safely (several rewrites of that name and type): the reason is an error
  */
 final class AdguardSync
@@ -72,6 +75,26 @@ final class AdguardSync
             }
         }
 
+        // Rewrites LabMan wrote that no planned record of that name and type asks for any more.
+        $plannedTypes = [];
+        foreach ($wanted as $r) {
+            $plannedTypes[$r['name'].'|'.$r['type']] = true;
+        }
+        foreach (ManagedRewrite::query()->orderBy('domain')->get() as $m) {
+            $row = collect($existing)->first(fn ($e) => $e['domain'] === $m->domain && $e['answer'] === $m->answer);
+            if ($row === null || isset($plannedTypes[$m->domain.'|'.self::typeOf($m->answer)])) {
+                continue;
+            }
+            $touched[$m->domain] = true;
+            $key = 'delete|'.$m->domain.'|'.$m->answer;
+            $items[] = $this->finish([
+                'key' => $key, 'title' => $row['raw'], 'type' => self::typeOf($m->answer), 'zone' => '', 'errors' => [],
+                'warnings' => ['LabMan wrote this rewrite and the DNS plan no longer asks for it. Deleting it cannot be undone from LabMan; tick it only if you want it gone.'],
+                'action' => 'delete', 'changes' => [['field' => self::typeOf($m->answer), 'from' => $m->answer, 'to' => '(deleted)']],
+                'data' => ['domain' => $row['raw'], 'answer' => $m->answer],
+            ]);
+        }
+
         $others = count(array_filter($existing, fn ($row) => ! isset($touched[$row['domain']])));
 
         return ['items' => $items, 'others' => $others];
@@ -93,7 +116,7 @@ final class AdguardSync
         foreach ($selected as $key => $fingerprint) {
             $item = $byKey->get($key);
 
-            if ($item === null || ! in_array($item['action'], ['create', 'update'], true) || ! hash_equals($item['fingerprint'], (string) $fingerprint)) {
+            if ($item === null || ! in_array($item['action'], ['create', 'update', 'delete'], true) || ! hash_equals($item['fingerprint'], (string) $fingerprint)) {
                 throw new AdguardException("'{$key}' changed since the preview was shown (in LabMan or in AdGuard Home), so nothing was applied. Run the preview again.");
             }
             if (! empty($item['errors'])) {
@@ -114,13 +137,20 @@ final class AdguardSync
             try {
                 if ($item['action'] === 'create') {
                     $this->client->add($d['domain'], $d['answer']);
+                    ManagedRewrite::query()->firstOrCreate(['domain' => mb_strtolower($d['domain']), 'answer' => $d['answer']]);
                     $message = "Added {$d['domain']} → {$d['answer']}.";
-                } else {
+                } elseif ($item['action'] === 'update') {
                     $this->client->change($d['old_domain'], $d['old'], $d['domain'], $d['answer']);
+                    ManagedRewrite::query()->where(['domain' => mb_strtolower($d['domain']), 'answer' => $d['old']])->delete();
+                    ManagedRewrite::query()->firstOrCreate(['domain' => mb_strtolower($d['domain']), 'answer' => $d['answer']]);
                     $message = "Changed {$d['domain']} from {$d['old']} to {$d['answer']}.";
+                } else {
+                    $this->client->delete($d['domain'], $d['answer']);
+                    ManagedRewrite::query()->where(['domain' => mb_strtolower($d['domain']), 'answer' => $d['answer']])->delete();
+                    $message = "Deleted {$d['domain']} → {$d['answer']}.";
                 }
                 $applied++;
-                $results[] = ['key' => $item['key'], 'title' => $item['title'], 'outcome' => $item['action'] === 'create' ? 'created' : 'updated', 'message' => $message];
+                $results[] = ['key' => $item['key'], 'title' => $item['title'], 'outcome' => ['create' => 'created', 'update' => 'updated', 'delete' => 'deleted'][$item['action']], 'message' => $message];
             } catch (AdguardException $e) {
                 $results[] = ['key' => $item['key'], 'title' => $item['title'], 'outcome' => 'failed', 'message' => $e->getMessage()];
             }

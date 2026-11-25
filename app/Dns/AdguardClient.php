@@ -7,8 +7,8 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
- * A minimal client for the AdGuard Home REST API, limited to DNS rewrites: list, add, change. It has no way to
- * delete one, on purpose: LabMan never removes DNS records.
+ * A minimal client for the AdGuard Home REST API, limited to DNS rewrites: list, add, change, delete. Callers delete only
+ * a rewrite LabMan wrote itself, from an applied, previewed item (see AdguardSync).
  */
 final class AdguardClient
 {
@@ -55,10 +55,16 @@ final class AdguardClient
         $this->send('post', '/control/rewrite/add', ['domain' => $domain, 'answer' => $answer]);
     }
 
+    /** Delete one rewrite, named exactly as AdGuard holds it. */
+    public function delete(string $domain, string $answer): void
+    {
+        $this->send('post', '/control/rewrite/delete', ['domain' => $domain, 'answer' => $answer]);
+    }
+
     /**
      * Change an existing rewrite in place. AdGuard Home takes this as a PUT whose `target` is the rewrite exactly as it
      * holds it now and whose `update` is the new value. Versions without this endpoint are not worked around by deleting
-     * and re-adding: LabMan has no delete, so the admin is told to edit that rewrite by hand.
+     * and re-adding: the admin is told to edit that rewrite by hand.
      */
     public function change(string $targetDomain, string $targetAnswer, string $newDomain, string $newAnswer): void
     {
@@ -69,7 +75,7 @@ final class AdguardClient
             ]);
         } catch (AdguardException $e) {
             if ($e->status === 404) {
-                throw new AdguardException("This AdGuard Home version has no rewrite update (PUT /control/rewrite/update answered 404), so {$targetDomain} was left as it is. LabMan never deletes rewrites: change {$targetDomain} to {$newAnswer} by hand in AdGuard Home (Filters > DNS rewrites), or upgrade AdGuard Home, then run the preview again.", 404);
+                throw new AdguardException("This AdGuard Home version has no rewrite update (PUT /control/rewrite/update answered 404), so {$targetDomain} was left as it is. LabMan will not delete and re-add it: change {$targetDomain} to {$newAnswer} by hand in AdGuard Home (Filters > DNS rewrites), or upgrade AdGuard Home, then run the preview again.", 404);
             }
 
             throw $e;

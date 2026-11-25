@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@php($actionable = collect($items)->whereIn('action', ['create', 'update'])->filter(fn ($i) => empty($i['errors'])))
+@php($actionable = collect($items)->whereIn('action', ['create', 'update', 'delete'])->filter(fn ($i) => empty($i['errors'])))
 @php($byAction = collect($items)->countBy('action'))
 
 @section('title', 'Preview AdGuard Home')
@@ -10,11 +10,11 @@
 
 @section('admin')
     <h1>Write to AdGuard Home: preview</h1>
-    <p class="muted">The inside records of the DNS plan compared with the DNS rewrites in AdGuard Home. Ticked changes will be <strong>written to AdGuard Home</strong>. Nothing is deleted.</p>
+    <p class="muted">The inside records of the DNS plan compared with the DNS rewrites in AdGuard Home. Ticked changes will be <strong>written to AdGuard Home</strong>. A delete is offered only for a rewrite LabMan wrote itself that the plan no longer asks for, and is never ticked for you.</p>
 
     <div class="card check-result {{ $actionable->isEmpty() ? 'inv-ok' : '' }}" role="status">
         <p class="check-line"><strong>Checked {{ count($items) }} record{{ count($items) === 1 ? '' : 's' }}:</strong>
-            {{ $byAction->get('unchanged', 0) }} already there, {{ $byAction->get('create', 0) }} to add, {{ $byAction->get('update', 0) }} to change, {{ $byAction->get('skip', 0) }} skipped.
+            {{ $byAction->get('unchanged', 0) }} already there, {{ $byAction->get('create', 0) }} to add, {{ $byAction->get('update', 0) }} to change, {{ $byAction->get('delete', 0) }} to delete, {{ $byAction->get('skip', 0) }} skipped.
             @if ($others) {{ $others }} other rewrite{{ $others === 1 ? '' : 's' }} in AdGuard Home {{ $others === 1 ? 'is' : 'are' }} not part of the plan and left alone. @endif</p>
         <p class="check-verdict">{{ $actionable->isEmpty() ? 'Nothing needs changing.' : $actionable->count().' '.($actionable->count() === 1 ? 'change is' : 'changes are').' ready to review below.' }}</p>
     </div>
@@ -31,7 +31,7 @@
             <div class="rows plan">
                 @foreach ($items as $item)
                     @php($blocked = ! empty($item['errors']))
-                    @php($can = in_array($item['action'], ['create', 'update']) && ! $blocked)
+                    @php($can = in_array($item['action'], ['create', 'update', 'delete']) && ! $blocked)
                     <div class="plan-item plan-{{ $item['action'] }}">
                         <div class="plan-head">
                             @if ($can)
@@ -43,8 +43,8 @@
                             @else
                                 <strong class="mono">{{ $item['title'] }}</strong>
                             @endif
-                            <span class="pill pill-{{ $blocked ? 'down' : ['create' => 'degraded', 'update' => 'degraded', 'unchanged' => 'up', 'skip' => 'unknown'][$item['action']] }}">
-                                {{ $blocked ? 'blocked' : ['create' => 'new rewrite', 'update' => 'change answer', 'unchanged' => 'already there', 'skip' => 'skipped'][$item['action']] }}
+                            <span class="pill pill-{{ $blocked ? 'down' : ['create' => 'degraded', 'update' => 'degraded', 'unchanged' => 'up', 'skip' => 'unknown', 'delete' => 'down'][$item['action']] }}">
+                                {{ $blocked ? 'blocked' : ['create' => 'new rewrite', 'update' => 'change answer', 'unchanged' => 'already there', 'skip' => 'skipped', 'delete' => 'delete'][$item['action']] }}
                             </span>
                             <small class="muted">{{ $item['zone'] }}</small>
                         </div>

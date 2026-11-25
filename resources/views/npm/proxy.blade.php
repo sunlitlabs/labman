@@ -7,7 +7,7 @@
     <h1>{{ $zones->count() > 1 ? $zone->name.' proxy' : 'Nginx Proxy Manager' }}</h1>
     <p class="muted">
         Import proxy hosts as services, or push LabMan's services back to NPM. Every change is previewed first and
-        nothing is written until you tick it. LabMan never deletes anything in NPM.
+        nothing is written until you tick it. LabMan deletes in NPM only a proxy host it created itself that nothing asks for any more, and only when you tick it.
     </p>
     @unless ($connection)
         <p class="notice">This zone has no proxy yet. <a href="{{ route('npm.proxy.edit', $zone) }}">Connect it</a> and LabMan walks you through matching your proxy hosts with your services, with sensible defaults already chosen.</p>

@@ -179,6 +179,16 @@ final class FakeNpm
             return Http::response($this->hosts[$id]);
         }
 
+        if (preg_match('#^/api/nginx/proxy-hosts/(\d+)$#', $path, $m) && $method === 'DELETE') {
+            $id = (int) $m[1];
+            if (! isset($this->hosts[$id])) {
+                return Http::response(['error' => ['code' => 404, 'message' => 'Not Found']], 404);
+            }
+            unset($this->hosts[$id]);
+
+            return Http::response(true);
+        }
+
         return Http::response(['error' => ['code' => 404, 'message' => 'Not Found']], 404);
     }
 }

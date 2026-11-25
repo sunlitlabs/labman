@@ -8,7 +8,7 @@
     <h1>AdGuard Home</h1>
     <p class="muted">
         Write the <strong>inside</strong> records of the <a href="{{ route('dns.index') }}">DNS plan</a> to AdGuard Home as DNS rewrites.
-        You always see a preview first and choose what is written. LabMan adds and changes rewrites; it never deletes one.
+        You always see a preview first and choose what is written. LabMan adds and changes rewrites, and offers to delete only a rewrite it wrote itself that the plan no longer asks for (never ticked for you).
         The public provider is not covered here.
     </p>
 

@@ -104,14 +104,14 @@ final class NpmTools
                     });
                 }),
 
-            new Tool('npm_push_preview', 'Preview pushing to NPM', 'Read-only. Compare the zone\'s LabMan services that have a domain with its NPM proxy hosts and list every proxy host that would be updated or created, including mirrors of other zones\' hosts and orphaned mirrors (listed, never deleted). Each item has a plain-language summary, warnings and, if it cannot be applied, errors. Show the user the exact diff, then call npm_push_apply with what they approve.',
+            new Tool('npm_push_preview', 'Preview pushing to NPM', 'Read-only. Compare the zone\'s LabMan services that have a domain with its NPM proxy hosts and list every proxy host that would be updated or created, including mirrors of other zones\' hosts and orphaned mirrors and unused hosts LabMan created (offered as action delete). Each item has a plain-language summary, warnings and, if it cannot be applied, errors. Show the user the exact diff, then call npm_push_apply with what they approve.',
                 $zone, [], 'admin', true, false, function (array $a) {
                     $z = ZoneTools::zone($a);
 
                     return self::npm(fn () => ['zone' => $z->name, 'items' => self::present((new NpmSync(NpmClient::fromStored($z), $z))->pushPlan(), $z->name, false), 'next' => 'Show the user these items, then npm_push_apply (same zone) with the ones they approve (key + fingerprint). Nothing is written until then.'] + ZoneTools::hint($a, $z));
                 }),
 
-            new Tool('npm_push_apply', 'Apply a push to NPM', 'WRITES to the live Nginx Proxy Manager of a zone: updates or creates proxy hosts for the previewed items the user approved (and requests a certificate only where the previewed item says so). Never deletes. Refused if anything changed since the preview, and for an item with an error.',
+            new Tool('npm_push_apply', 'Apply a push to NPM', 'WRITES to the live Nginx Proxy Manager of a zone: updates or creates proxy hosts for the previewed items the user approved (and requests a certificate only where the previewed item says so). An item with action delete DELETES a proxy host from NPM, only one LabMan created, and only if the user approved that item. Refused if anything changed since the preview, and for an item with an error.',
                 $zone + ['items' => self::SELECTION], ['items'], 'admin', false, true, function (array $a, McpContext $ctx) {
                     $z = ZoneTools::zone($a);
 

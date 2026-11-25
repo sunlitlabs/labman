@@ -51,7 +51,7 @@ final class AdguardTools
                     return ['connected' => false];
                 }),
 
-            new Tool('adguard_preview', 'Preview writing the DNS plan to AdGuard Home', 'Read-only. Compare the inside records of the DNS plan with the DNS rewrites in AdGuard Home and list every rewrite that would be added or changed. Rewrites AdGuard has that the plan does not mention are only counted and left alone. Show the user the items, then call adguard_apply with what they approve.',
+            new Tool('adguard_preview', 'Preview writing the DNS plan to AdGuard Home', 'Read-only. Compare the inside records of the DNS plan with the DNS rewrites in AdGuard Home and list every rewrite that would be added or changed, plus rewrites LabMan wrote that the plan no longer asks for (action delete). Rewrites AdGuard has that LabMan did not write are only counted and left alone. Show the user the items, then call adguard_apply with what they approve.',
                 [], [], 'admin', true, false, fn () => self::run(function () {
                     $plan = (new AdguardSync(AdguardClient::fromStored()))->plan();
                     $items = array_map(fn ($i) => array_intersect_key($i, array_flip(['key', 'title', 'action', 'zone', 'changes', 'warnings', 'errors', 'fingerprint'])), $plan['items']);
@@ -59,7 +59,7 @@ final class AdguardTools
                     return ['items' => $items, 'other_rewrites_left_alone' => $plan['others'], 'next' => 'Show the user these items, then adguard_apply with the ones they approve (key + fingerprint). Nothing is written until then.'];
                 })),
 
-            new Tool('adguard_apply', 'Write approved rewrites to AdGuard Home', 'WRITES to the live AdGuard Home: adds or changes the DNS rewrites of the previewed items the user approved. Never deletes. Refused if anything changed since the preview, and for an item with an error.',
+            new Tool('adguard_apply', 'Write approved rewrites to AdGuard Home', 'WRITES to the live AdGuard Home: adds or changes the DNS rewrites of the previewed items the user approved. An item with action delete DELETES a rewrite, only one LabMan wrote itself, and only if the user approved that item. Refused if anything changed since the preview, and for an item with an error.',
                 ['items' => [
                     'type' => 'array',
                     'description' => 'The preview items to apply, copied exactly from the preview: {key, fingerprint}.',

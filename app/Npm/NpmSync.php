@@ -4,6 +4,7 @@ namespace App\Npm;
 
 use App\Domain\ServiceInput;
 use App\Models\Server;
+use App\Models\ManagedHost;
 use App\Models\Mirror;
 use App\Models\Service;
 use App\Models\Zone;
@@ -25,7 +26,8 @@ use Illuminate\Validation\ValidationException;
  * else by its domain appearing in the host's domain names.
  *   import  NPM -> LabMan: creates/updates services (scheme, backend, port, websockets, link)
  *   push    LabMan -> NPM: updates/creates proxy hosts (domain, scheme, forward host/port, websockets)
- * LabMan never deletes anything in NPM, and never deletes services during an import.
+ * LabMan deletes in NPM only a proxy host it created itself (a mirror it made, or a host it created for a service) that nothing
+ * asks for any more, only as a previewed item the admin ticked (never an automatic update), and never deletes services during an import.
  */
 final class NpmSync
 {
@@ -233,7 +235,51 @@ final class NpmSync
             }
         }
 
-        return [...$items, ...$this->mirrorItems($hosts, $only, $auto)];
+        return [...$items, ...$this->mirrorItems($hosts, $only, $auto), ...($only === null && ! $auto ? $this->managedOrphanItems($hosts) : [])];
+    }
+
+    /**
+     * Proxy hosts LabMan created for services that nothing uses any more (the service is gone, or no longer has that
+     * name), offered for deletion. Only a host still in NPM under the name LabMan gave it qualifies: one renamed or
+     * repurposed in NPM is no longer LabMan's to delete.
+     *
+     * @param  Collection<int, array<string, mixed>>  $hosts
+     * @return list<array<string, mixed>>
+     */
+    private function managedOrphanItems(Collection $hosts): array
+    {
+        $items = [];
+        $mirrorHosts = Mirror::query()->where('zone_id', $this->zone->id)->pluck('npm_host_id')->filter()->all();
+
+        foreach (ManagedHost::query()->where('zone_id', $this->zone->id)->orderBy('domain')->get() as $m) {
+            $host = $hosts->first(fn ($h) => (int) $h['id'] === $m->host_id);
+            $names = $host ? array_map('mb_strtolower', (array) ($host['domain_names'] ?? [])) : [];
+            if ($host === null || ! in_array(mb_strtolower($m->domain), $names, true) || in_array($m->host_id, $mirrorHosts, true)) {
+                continue;
+            }
+            $used = Service::query()->where(fn ($q) => $q
+                ->where(fn ($w) => $w->where('npm_host_id', $m->host_id)->whereNotNull('domain')->where('domain', '!=', ''))
+                ->orWhere(fn ($w) => $w->where('npm_public_host_id', $m->host_id)->whereNotNull('public_domain')->where('public_domain', '!=', ''))
+                ->orWhereIn(\Illuminate\Support\Facades\DB::raw('lower(domain)'), $names)
+                ->orWhereIn(\Illuminate\Support\Facades\DB::raw('lower(public_domain)'), $names))->exists();
+            if ($used) {
+                continue;
+            }
+
+            $items[] = $this->deleteItem('host-orphan:'.$m->id, 'Unused proxy host: '.$m->domain, 'host', $m->id, $m->host_id, $m->domain, 'LabMan created this proxy host for a service that no longer uses it.');
+        }
+
+        return $items;
+    }
+
+    /** @return array<string, mixed> */
+    private function deleteItem(string $key, string $title, string $kind, int $recordId, int $hostId, string $domain, string $why): array
+    {
+        return $this->finish([
+            'key' => $key, 'title' => $title, 'action' => 'delete', 'host_id' => $hostId,
+            'changes' => [['field' => 'proxy host', 'from' => "#{$hostId} {$domain}", 'to' => '(deleted from NPM)']],
+            'data' => ['kind' => $kind, 'record_id' => $recordId, 'host_id' => $hostId, 'domain' => $domain],
+        ], [$why.' Deleting it cannot be undone from LabMan; tick it only if you want it gone.']);
     }
 
     /**
@@ -247,10 +293,19 @@ final class NpmSync
 
         $requested = [];
 
-        foreach ($this->selectedItems($this->pushPlan(), $selected, ['create', 'update']) as $item) {
+        foreach ($this->selectedItems($this->pushPlan(), $selected, ['create', 'update', 'delete']) as $item) {
             try {
                 $data = $item['data'];
                 $note = '';
+
+                if ($item['action'] === 'delete') {
+                    $this->client->deleteProxyHost($data['host_id']);
+                    $data['kind'] === 'mirror' ? Mirror::query()->whereKey($data['record_id'])->delete() : ManagedHost::query()->whereKey($data['record_id'])->delete();
+                    $applied++;
+                    $results[] = ['title' => $item['title'], 'outcome' => 'applied', 'message' => 'Proxy host #'.$data['host_id'].' ('.$data['domain'].') deleted from NPM.'];
+
+                    continue;
+                }
 
                 // A certificate is requested here and nowhere else: only for an item that was previewed and ticked, and once per set of names.
                 if (! empty($data['cert_request'])) {
@@ -281,6 +336,10 @@ final class NpmSync
                     ]);
                 } elseif ($hostId > 0) {
                     Service::whereKey($data['service_id'])->update([$data['link_field'] => $hostId]);
+                    if ($item['action'] === 'create') {
+                        // LabMan made this host, so it may later offer to delete it (and only then).
+                        ManagedHost::updateOrCreate(['zone_id' => $this->zone->id, 'host_id' => $hostId], ['domain' => (string) ($data['payload']['domain_names'][0] ?? '')]);
+                    }
                 }
 
                 $applied++;
@@ -591,15 +650,18 @@ final class NpmSync
         }
 
         // Orphans are only reported for a full plan; a run limited to some services must not list unrelated ones.
-        if ($only === null) {
+        if ($only === null && ! $auto) {
             foreach (Mirrors::orphans($this->zone, $wanted) as $orphan) {
                 $why = $orphan->service_id && Service::query()->whereKey($orphan->service_id)->exists()
                     ? 'No mirror rule or publish setting asks for it any more.'
                     : 'Its service no longer exists or no longer has this name.';
-                $items[] = $this->finish([
-                    'key' => 'mirror-orphan:'.$orphan->id, 'title' => 'Orphaned mirror: '.$orphan->domain.' ('.$orphan->service_name.')',
-                    'action' => 'orphan', 'host_id' => $orphan->npm_host_id,
-                ], [$why.' LabMan never deletes anything in NPM: remove proxy host '.($orphan->npm_host_id ? '#'.$orphan->npm_host_id : 'for '.$orphan->domain).' in NPM yourself, then forget it here.']);
+                $title = 'Orphaned mirror: '.$orphan->domain.' ('.$orphan->service_name.')';
+                $host = $orphan->npm_host_id ? $hosts->first(fn ($h) => (int) $h['id'] === $orphan->npm_host_id) : null;
+                $isOurs = $host !== null && in_array(mb_strtolower($orphan->domain), array_map('mb_strtolower', (array) ($host['domain_names'] ?? [])), true) && str_contains((string) ($host['advanced_config'] ?? ''), Mirrors::MARKER);
+
+                $items[] = $isOurs
+                    ? $this->deleteItem('mirror-orphan:'.$orphan->id, $title, 'mirror', $orphan->id, $orphan->npm_host_id, $orphan->domain, $why)
+                    : $this->finish(['key' => 'mirror-orphan:'.$orphan->id, 'title' => $title, 'action' => 'orphan', 'host_id' => $orphan->npm_host_id], [$why.' Its proxy host is no longer in NPM as LabMan made it (gone, renamed or edited there), so LabMan will not delete it. Remove it in NPM yourself if it is still there, then forget it here.']);
             }
         }
 
