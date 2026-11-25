@@ -180,6 +180,14 @@ final class ZoneTools
                         'next' => 'Nothing changes in a proxy until npm_push_preview and npm_push_apply.'];
                 }),
 
+            new Tool('zone_changes', 'What changed in a zone\'s proxy', 'Read-only. The log of changes applied to a zone\'s proxy (previews, imports, the guided sync, automatic updates, and MCP applies), newest first, with who applied them and what each did.',
+                ZoneTools::zoneProperty() + ['limit' => Tool::int('How many entries (default 10, max 50).')], [], 'admin', true, false, function (array $a) {
+                    $zone = self::zone($a);
+                    $rows = \App\Models\ProxyLog::query()->where('zone_id', $zone->id)->latest('id')->limit(max(1, min(50, (int) ($a['limit'] ?? 10))))->get();
+
+                    return ['zone' => $zone->name, 'changes' => $rows->map(fn ($r) => ['at' => $r->created_at?->toIso8601String(), 'source' => $r->source, 'who' => $r->who, 'applied' => $r->applied, 'failed' => $r->failed, 'results' => $r->results])->values()];
+                }),
+
             new Tool('zone_for_address', 'Which zone fits an address', 'Read-only. The zone whose network blocks contain an address (the narrowest wins), or none. Use it to place new servers.',
                 ['address' => Tool::str('An IPv4 or IPv6 address.')], ['address'], 'admin', true, false,
                 function (array $a) {

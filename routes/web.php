@@ -47,6 +47,7 @@ Route::get('/status', StatusController::class)->name('status');
 // Read screens: visibility is configurable per screen.
 Route::get('/services', [ServiceController::class, 'index'])->name('services.index')->middleware('screen:services');
 Route::get('/servers', [ServerController::class, 'index'])->name('servers.index')->middleware('screen:servers');
+Route::get('/links', [LinkController::class, 'index'])->name('links.index');
 Route::get('/admin', [AdminController::class, 'index'])->name('admin.index')->middleware('admin.area');
 Route::get('/settings', [SettingsController::class, 'general'])->name('settings.index')->middleware('screen:settings');
 Route::get('/settings/access', [SettingsController::class, 'access'])->name('settings.access')->middleware('screen:settings');
@@ -60,7 +61,7 @@ Route::middleware('admin')->group(function () {
     Route::post('/services/{service}/diagnose', [ServiceController::class, 'applyDiagnosis'])->name('services.diagnose.apply');
     Route::resource('services', ServiceController::class)->except(['index', 'show']);
     Route::resource('servers', ServerController::class)->except(['index', 'show']);
-    Route::resource('links', LinkController::class)->except(['show']);
+    Route::resource('links', LinkController::class)->except(['index', 'show']);
     Route::get('/zones/setup', [ZoneWizardController::class, 'show'])->name('zones.wizard');
     Route::post('/zones/setup/{step}', [ZoneWizardController::class, 'save'])->name('zones.wizard.save');
     Route::post('/zones/refresh', [ZoneController::class, 'refresh'])->name('zones.refresh');

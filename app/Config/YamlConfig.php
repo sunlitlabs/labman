@@ -219,6 +219,7 @@ final class YamlConfig
             'ssh_port' => (int) $s->ssh_port !== 22 ? (int) $s->ssh_port : null,
             'notes' => $s->notes,
             'monitor' => $s->monitor ? null : false,
+            'on_dashboard' => $s->on_dashboard ? null : false,
             'check_ssh' => $s->check_ssh ? null : false,
             'icon' => $s->icon,
         ], fn ($v) => $v !== null && $v !== ''))->all();
@@ -241,6 +242,7 @@ final class YamlConfig
             'notes' => $s->notes,
             'health_path' => $s->health_path,
             'monitor' => $s->monitor ? null : false,
+            'on_dashboard' => $s->on_dashboard ? null : false,
             'check_tcp' => $s->check_tcp ? null : false,
             'icon' => $s->icon,
             'certificate' => $s->cert_mode,
@@ -645,7 +647,7 @@ final class YamlConfig
             }
 
             $extraDomains = self::extraDomains($who, $item, $errors);
-            $flags = self::flags($who, $item, ['monitor' => true, 'check_ssh' => true], $errors);
+            $flags = self::flags($who, $item, ['monitor' => true, 'check_ssh' => true, 'on_dashboard' => true], $errors);
             $icon = self::icon($who, $item, $errors);
 
             $group = self::text($item['group'] ?? null);
@@ -663,6 +665,7 @@ final class YamlConfig
                     'ssh_port' => $sshPort,
                     'notes' => $notes ?: null,
                     'monitor' => $flags['monitor'],
+                    'on_dashboard' => $flags['on_dashboard'],
                     'check_ssh' => $flags['check_ssh'],
                     'extra_domains' => $extraDomains,
                     'icon' => $icon,
@@ -851,7 +854,7 @@ final class YamlConfig
                 }
             }
 
-            $flags = self::flags($who, $item, ['verify_tls' => true, 'public_check' => true, 'websockets' => false, 'monitor' => true, 'check_tcp' => true], $errors);
+            $flags = self::flags($who, $item, ['verify_tls' => true, 'public_check' => true, 'websockets' => false, 'monitor' => true, 'check_tcp' => true, 'on_dashboard' => true], $errors);
             $icon = self::icon($who, $item, $errors);
 
             $healthPath = null;
@@ -887,6 +890,7 @@ final class YamlConfig
                     'notes' => $notes ?: null,
                     'health_path' => $healthPath,
                     'monitor' => $flags['monitor'],
+                    'on_dashboard' => $flags['on_dashboard'],
                     'check_tcp' => $flags['check_tcp'],
                     'icon' => $icon,
                 ] + self::zoneRef($who, $item, $errors) + self::certRef($who, $item, $errors)

@@ -180,24 +180,73 @@
   var filter = document.getElementById('filter');
   var noMatch = document.getElementById('no-match');
 
+  // The dashboard's tabs (All / Services / Servers / Links) narrow what the search looks through.
+  var tabs = document.querySelector('[data-tabs]');
+  var currentTab = 'all';
+
   function applyFilter() {
-    if (!filter) return;
-    var tokens = filter.value.toLowerCase().split(/\s+/).filter(Boolean);
+    var tokens = filter ? filter.value.toLowerCase().split(/\s+/).filter(Boolean) : [];
     var visibleTotal = 0;
+    var perSection = {};
 
     document.querySelectorAll('.group').forEach(function (group) {
+      var section = group.getAttribute('data-section');
+      var inTab = !section || currentTab === 'all' || section === currentTab;
       var visible = 0;
+      var matching = 0;
       group.querySelectorAll('[data-filter]').forEach(function (row) {
         var hay = row.getAttribute('data-filter');
         var match = tokens.every(function (t) { return hay.indexOf(t) !== -1; });
-        row.hidden = !match;
-        if (match) visible++;
+        if (match) matching++;
+        row.hidden = !(match && inTab);
+        if (match && inTab) visible++;
       });
+      if (section) perSection[section] = (perSection[section] || 0) + matching;
       group.hidden = visible === 0;
       visibleTotal += visible;
     });
 
-    if (noMatch) noMatch.hidden = visibleTotal !== 0 || tokens.length === 0;
+    if (tabs) {
+      var all = 0;
+      Object.keys(perSection).forEach(function (k) { all += perSection[k]; });
+      tabs.querySelectorAll('[data-tab-count]').forEach(function (n) {
+        var k = n.getAttribute('data-tab-count');
+        n.textContent = k === 'all' ? all : (perSection[k] || 0);
+      });
+    }
+
+    if (noMatch) noMatch.hidden = visibleTotal !== 0 || (tokens.length === 0 && currentTab === 'all');
+  }
+
+  function selectTab(key, focus) {
+    if (!tabs) return;
+    var buttons = tabs.querySelectorAll('[data-tab]');
+    var known = false;
+    buttons.forEach(function (b) { if (b.getAttribute('data-tab') === key) known = true; });
+    currentTab = known ? key : 'all';
+    buttons.forEach(function (b) {
+      var on = b.getAttribute('data-tab') === currentTab;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.setAttribute('tabindex', on ? '0' : '-1');
+      if (on && focus) b.focus();
+    });
+    try { window.history.replaceState(null, '', currentTab === 'all' ? window.location.pathname + window.location.search : '#' + currentTab); } catch (e) { /* not essential */ }
+    applyFilter();
+  }
+
+  if (tabs) {
+    tabs.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-tab]');
+      if (b) selectTab(b.getAttribute('data-tab'), false);
+    });
+    tabs.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      var keys = Array.prototype.map.call(tabs.querySelectorAll('[data-tab]'), function (b) { return b.getAttribute('data-tab'); });
+      var i = keys.indexOf(currentTab) + (e.key === 'ArrowRight' ? 1 : -1);
+      selectTab(keys[(i + keys.length) % keys.length], true);
+      e.preventDefault();
+    });
+    selectTab((window.location.hash || '').replace('#', '') || 'all', false);
   }
 
   if (filter) {

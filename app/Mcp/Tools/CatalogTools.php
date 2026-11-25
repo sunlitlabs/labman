@@ -44,6 +44,7 @@ final class CatalogTools
             'ssh_port' => Tool::int('SSH port, default 22.'),
             'notes' => Tool::str('Free text, max 500 characters.'),
             'monitor' => Tool::bool('Health-check this server (default true). False hides its status ("not monitored").'),
+            'on_dashboard' => Tool::bool('Show this server on the dashboard (default true). False only hides the tile; it is still monitored and listed.'),
             'check_ssh' => Tool::bool('Count the SSH port as a health check (default true).'),
             'icon' => Tool::str('Icon name from the icon library, e.g. proxmox. Empty for none.'),
         ];
@@ -62,12 +63,15 @@ final class CatalogTools
             'expect' => Tool::str('Healthy HTTP statuses: a number, a range, or a comma list, e.g. 200, 401 or 200-399,401. Default 200-499 (any answer except a server error).'),
             'health_path' => Tool::str('Path to request for the health check if different from `path` (e.g. /health). Must start with /.'),
             'monitor' => Tool::bool('Health-check this service (default true). False hides its status ("not monitored").'),
+            'on_dashboard' => Tool::bool('Show this service on the dashboard (default true). False only hides the tile; it is still monitored and listed.'),
             'check_tcp' => Tool::bool('An open backend port counts as up even if the web check fails (default true).'),
             'icon' => Tool::str('Icon name from the icon library, e.g. jellyfin. Empty for none.'),
             'verify_tls' => Tool::bool('Verify the certificate of the public check (default true).'),
             'public_check' => Tool::bool('Also check https://<domain><path> (default true).'),
             'websockets' => Tool::bool('Informational flag.'),
             'notes' => Tool::str('Free text, max 500 characters.'),
+            'update_project' => Tool::int('Semaphore project id of this service\'s update workbook (see semaphore_list_projects). Empty for none.'),
+            'update_template' => Tool::int('Semaphore template id of this service\'s update workbook; needs update_project.'),
         ];
 
         $settings = [

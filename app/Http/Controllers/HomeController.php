@@ -19,8 +19,10 @@ class HomeController extends Controller
         $canServers = Gate::allows('view-screen', 'servers');
 
         if ($canServices || $canServers) {
-            $services = $canServices ? Service::query()->with('server')->orderBy('group')->orderBy('name')->get() : collect();
-            $servers = $canServers ? Server::query()->orderBy('group')->orderBy('name')->get() : collect();
+            $services = $canServices ? Service::query()->with('server')->where('on_dashboard', true)->orderBy('group')->orderBy('name')->get() : collect();
+            $servers = $canServers ? Server::query()->where('on_dashboard', true)->orderBy('group')->orderBy('name')->get() : collect();
+
+            $links = Link::query()->where('on_dashboard', true)->orderBy('group')->orderBy('name')->get();
 
             return view('dashboard', [
                 'canServices' => $canServices,
@@ -31,8 +33,9 @@ class HomeController extends Controller
                     'services' => StatusView::summary($services),
                     'servers' => StatusView::summary($servers),
                 ],
-                'linkGroups' => Link::query()->orderBy('group')->orderBy('name')->get()->groupBy(fn (Link $l) => $l->group ?: ''),
-                'empty' => $services->isEmpty() && $servers->isEmpty() && ! Link::query()->exists(),
+                'linkGroups' => $links->groupBy(fn (Link $l) => $l->group ?: ''),
+                'kinds' => ['services' => $services->count(), 'servers' => $servers->count(), 'links' => $links->count()],
+                'empty' => $services->isEmpty() && $servers->isEmpty() && $links->isEmpty(),
             ]);
         }
 

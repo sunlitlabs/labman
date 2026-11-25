@@ -11,10 +11,11 @@ class Server extends Model
 {
     protected $fillable = [
         'name', 'address', 'domain', 'group', 'ports', 'ssh_user', 'ssh_port', 'notes', 'inventory_host',
-        'monitor', 'check_ssh', 'icon', 'extra_domains', 'zone_id',
+        'monitor', 'check_ssh', 'icon', 'extra_domains', 'zone_id', 'on_dashboard',
     ];
 
     protected $attributes = [
+        'on_dashboard' => true,
         'monitor' => true,
         'check_ssh' => true,
     ];
@@ -40,6 +41,7 @@ class Server extends Model
             'checks' => 'array',
             'ssh_port' => 'integer',
             'monitor' => 'boolean',
+            'on_dashboard' => 'boolean',
             'check_ssh' => 'boolean',
             'checked_at' => 'datetime',
         ];

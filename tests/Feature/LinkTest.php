@@ -56,7 +56,7 @@ class LinkTest extends TestCase
         $link = Link::create(['name' => 'Cloud', 'url' => 'https://cloud.example.org']);
 
         $this->actingAs($this->user());
-        $this->get(route('links.index'))->assertForbidden();
+        $this->get(route('links.index'))->assertOk()->assertDontSee('Add link')->assertDontSee('/edit', false);
         $this->post('/links', ['name' => 'X', 'url' => 'https://example.com'])->assertForbidden();
         $this->delete(route('links.destroy', $link))->assertForbidden();
         $this->assertSame(1, Link::count());

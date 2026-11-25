@@ -4,7 +4,11 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tool;
 use App\Mcp\ToolException;
+use App\Domain\ServerInput;
+use App\Inventory\HostMatcher;
+use App\Models\Server;
 use App\Semaphore\Connection;
+use App\Semaphore\HostSync;
 use App\Semaphore\RunOptions;
 use App\Semaphore\SemaphoreClient;
 use App\Semaphore\SemaphoreException;
@@ -42,6 +46,79 @@ final class SemaphoreTools
                     Connection::forget();
 
                     return ['connected' => false];
+                }),
+
+            new Tool('semaphore_get_host_sync', 'Show the Semaphore host list setting', 'Which Semaphore inventory (the host list) LabMan reads and updates, whether it is kept up to date automatically when servers change, and the result of the last update.',
+                [], [], 'admin', true, false, fn () => ['target' => HostSync::target(), 'automatic' => HostSync::auto(), 'last_sync' => HostSync::lastSync()]),
+
+            new Tool('semaphore_set_host_sync', 'Choose the Semaphore host list', 'Choose the static Semaphore inventory that LabMan reads and updates, and whether LabMan writes the server list into it automatically whenever servers change (ask the user before turning that on). LabMan first reads it and refuses anything that is not a readable static inventory.',
+                $ids + ['inventory_id' => Tool::int('Semaphore inventory id.'), 'automatic' => Tool::bool('Update the inventory whenever servers change (default false).')], ['project_id', 'inventory_id'], 'admin', false, false,
+                fn (array $a) => self::guard(function () use ($a) {
+                    HostSync::load(SemaphoreClient::fromStored(), (int) $a['project_id'], (int) $a['inventory_id']);
+                    HostSync::saveTarget((int) $a['project_id'], (int) $a['inventory_id'], (bool) ($a['automatic'] ?? false));
+                    HostSync::watch(true);
+
+                    return ['target' => HostSync::target(), 'automatic' => HostSync::auto()];
+                })),
+
+            new Tool('semaphore_clear_host_sync', 'Stop using a Semaphore host list', 'LabMan no longer reads or updates a Semaphore inventory. Nothing in Semaphore changes.',
+                [], [], 'admin', false, true, function () {
+                    HostSync::forgetTarget();
+
+                    return ['target' => null];
+                }),
+
+            new Tool('semaphore_sync_hosts', 'Write the servers into the Semaphore host list', 'WRITES to Semaphore: adds and updates the hosts of the chosen inventory to match LabMan\'s servers (this is also the way to do it when automatic updates are off). It does not remove hosts.',
+                [], [], 'admin', false, false, fn () => self::guard(fn () => HostSync::sync())),
+
+            new Tool('semaphore_list_unknown_hosts', 'List Semaphore hosts LabMan does not have', 'Read-only. Hosts in the Semaphore inventory that no LabMan server matches (and nobody ignored), with the address LabMan would use. Use semaphore_adopt_hosts to add or ignore them.',
+                [], [], 'admin', true, false, function () {
+                    $names = Server::query()->pluck('name')->map(fn ($n) => mb_strtolower($n))->all();
+                    $hosts = [];
+                    foreach (HostSync::strangers() as $name => $info) {
+                        $hosts[] = ['host' => $name, 'address' => HostMatcher::address($name, $info['vars']) ?? $name, 'group' => $info['groups'][0] ?? null, 'name_clash' => in_array(mb_strtolower($name), $names, true)];
+                    }
+
+                    return ['hosts' => $hosts];
+                }),
+
+            new Tool('semaphore_adopt_hosts', 'Add or ignore Semaphore hosts', 'For hosts from semaphore_list_unknown_hosts: add them to LabMan as servers (optionally under another name) or ignore them so they are not offered again. Nothing is written to Semaphore.',
+                [
+                    'add' => ['type' => 'array', 'description' => 'Hosts to add as servers.', 'items' => ['type' => 'object', 'properties' => ['host' => ['type' => 'string'], 'name' => ['type' => 'string', 'description' => 'Server name (default: the host name).']], 'required' => ['host'], 'additionalProperties' => false]],
+                    'ignore' => Tool::strs('Host names to ignore.'),
+                ], [], 'admin', false, false, function (array $a) {
+                    $strangers = HostSync::strangers();
+                    $added = [];
+                    $problems = [];
+
+                    foreach ($a['add'] ?? [] as $item) {
+                        $host = (string) ($item['host'] ?? '');
+                        if (! isset($strangers[$host])) {
+                            $problems[] = "{$host}: not an unknown host (see semaphore_list_unknown_hosts)";
+
+                            continue;
+                        }
+                        try {
+                            $info = $strangers[$host];
+                            $payload = ServerInput::validate([
+                                'name' => trim((string) ($item['name'] ?? '')) ?: $host,
+                                'address' => HostMatcher::address($host, $info['vars']) ?? $host,
+                                'group' => $info['groups'][0] ?? null, 'ssh_port' => 22,
+                            ]);
+                            Server::create($payload + ['inventory_host' => $host]);
+                            $added[] = $host;
+                        } catch (\Illuminate\Validation\ValidationException $e) {
+                            $problems[] = "{$host}: ".implode(' ', $e->validator->errors()->all());
+                        }
+                    }
+
+                    $ignore = array_values(array_filter(array_map('strval', $a['ignore'] ?? []), fn ($h) => isset($strangers[$h])));
+                    if ($ignore) {
+                        HostSync::ignore($ignore);
+                    }
+                    HostSync::settleNotice();
+
+                    return ['added' => $added, 'ignored' => $ignore, 'problems' => $problems];
                 }),
 
             new Tool('semaphore_list_projects', 'List Semaphore projects', 'The projects the token can see.',

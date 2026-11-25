@@ -15,7 +15,7 @@ use Illuminate\Validation\Rule;
 final class ServerInput
 {
     /** Switches where an absent value means "leave as is" (forms always send them), never "off". */
-    private const FLAGS = ['monitor' => true, 'check_ssh' => true];
+    private const FLAGS = ['monitor' => true, 'check_ssh' => true, 'on_dashboard' => true];
 
     /** Normalise raw input: "445, 8080" becomes a list, a missing SSH port becomes 22. */
     public static function prepare(array $in): array
@@ -68,6 +68,7 @@ final class ServerInput
             'ssh_port' => ['required', 'integer', 'between:1,65535'],
             'notes' => ['nullable', 'string', 'max:500'],
             'monitor' => ['boolean'],
+            'on_dashboard' => ['boolean'],
             'check_ssh' => ['boolean'],
             'icon' => ['nullable', 'string', 'max:80', Check::icon()],
             'zone_id' => ['nullable', 'integer', 'exists:zones,id'],
@@ -115,6 +116,7 @@ final class ServerInput
             'ssh_port' => $server->ssh_port,
             'notes' => $server->notes,
             'monitor' => $server->monitor,
+            'on_dashboard' => $server->on_dashboard,
             'check_ssh' => $server->check_ssh,
             'icon' => $server->icon,
             'zone_id' => $server->zone_id,

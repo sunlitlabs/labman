@@ -13,12 +13,13 @@ class Service extends Model
     protected $fillable = [
         'name', 'domain', 'server_id', 'address', 'port', 'scheme', 'path', 'group',
         'expect', 'verify_tls', 'public_check', 'websockets', 'notes', 'npm_host_id', 'update_project', 'update_template',
-        'health_path', 'monitor', 'check_tcp', 'icon', 'public_domain', 'npm_public_host_id', 'extra_domains', 'zone_id', 'cert_mode', 'publish_zones',
+        'health_path', 'monitor', 'check_tcp', 'icon', 'public_domain', 'npm_public_host_id', 'extra_domains', 'zone_id', 'cert_mode', 'publish_zones', 'on_dashboard',
     ];
 
     /** Defaults for new models (the database defaults are older than the current ones). */
     protected $attributes = [
         'expect' => ExpectRange::DEFAULT,
+        'on_dashboard' => true,
         'monitor' => true,
         'check_tcp' => true,
     ];
@@ -33,6 +34,7 @@ class Service extends Model
             'public_check' => 'boolean',
             'websockets' => 'boolean',
             'monitor' => 'boolean',
+            'on_dashboard' => 'boolean',
             'check_tcp' => 'boolean',
             'checks' => 'array',
             'checked_at' => 'datetime',

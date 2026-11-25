@@ -25,6 +25,9 @@
             @can('view-screen', 'servers')
                 <a href="{{ route('servers.index') }}" @if(request()->routeIs('servers.*')) aria-current="page" @endif>Servers</a>
             @endcan
+            @if (Gate::allows('view-screen', 'services') || Gate::allows('view-screen', 'servers'))
+                <a href="{{ route('links.index') }}" @if(request()->routeIs('links.*')) aria-current="page" @endif>Links</a>
+            @endif
             @can('view-admin')
                 <a href="{{ route('admin.index') }}" @if(request()->routeIs(\App\Support\AdminNav::ROUTES)) aria-current="page" @endif>Admin</a>
             @endcan

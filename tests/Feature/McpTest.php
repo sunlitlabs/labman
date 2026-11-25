@@ -188,7 +188,7 @@ class McpTest extends TestCase
         $read = array_column($this->rpc('tools/list', [], $this->readToken)->assertOk()->json('result.tools'), 'name');
         $admin = array_column($this->rpc('tools/list', [], $this->adminToken)->assertOk()->json('result.tools'), 'name');
 
-        $this->assertEqualsCanonicalizing(['list_services', 'list_servers', 'get_status', 'get_settings', 'export_yaml'], $read);
+        $this->assertEqualsCanonicalizing(['list_services', 'list_servers', 'list_links', 'get_status', 'get_settings', 'export_yaml'], $read);
         $this->assertGreaterThan(count($read), count($admin));
         foreach (['create_server', 'update_server', 'delete_server', 'create_service', 'update_service', 'delete_service', 'update_settings',
             'import_yaml', 'run_health_check', 'list_users', 'create_user', 'update_user', 'approve_user',

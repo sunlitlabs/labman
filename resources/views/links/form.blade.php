@@ -1,8 +1,8 @@
-@extends('layouts.admin')
+@extends('layouts.app')
 
 @section('title', $link->exists ? 'Edit link' : 'Add link')
 
-@section('admin')
+@section('content')
     <div class="wide">
         <h1>{{ $link->exists ? 'Edit '.$link->name : 'Add link' }}</h1>
 
@@ -35,6 +35,15 @@
                         @include('partials.iconpick', ['model' => $link, 'value' => old('icon', $link->icon)])
                     </div>
                 </div>
+            </section>
+
+            <section class="formcard">
+                <h2>Dashboard</h2>
+                <label class="check">
+                    <input type="hidden" name="on_dashboard" value="0">
+                    <input type="checkbox" name="on_dashboard" value="1" @checked((bool) old('on_dashboard', $link->on_dashboard ?? true))>
+                    <span>Show on the dashboard <span class="hint">(a link that is not shown is only kept here)</span></span>
+                </label>
             </section>
 
             <div class="savebar">

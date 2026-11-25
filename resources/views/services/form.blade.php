@@ -105,6 +105,15 @@
             <p class="hint service-preview" data-service-preview aria-live="polite"></p>
 
             <section class="formcard">
+                <h2>Dashboard</h2>
+                <label class="check">
+                    <input type="hidden" name="on_dashboard" value="0">
+                    <input type="checkbox" name="on_dashboard" value="1" @checked((bool) old('on_dashboard', $service->on_dashboard ?? true))>
+                    <span>Show on the dashboard <span class="hint">(untick to keep it off the dashboard, for example a page for LabMan itself; it is still monitored and listed here)</span></span>
+                </label>
+            </section>
+
+            <section class="formcard">
                 <h2>Health check</h2>
                 <p class="sub">A service shows as up when <strong>any</strong> check passes: the web request, an open port, or its public address.</p>
                 <label class="check">

@@ -11,6 +11,15 @@ use App\Monitoring\StatusView;
 final class Present
 {
     /** @return array<string, mixed> */
+    /** @return array<string, mixed> */
+    public static function link(\App\Models\Link $link): array
+    {
+        return [
+            'id' => $link->id, 'name' => $link->name, 'url' => $link->url, 'group' => $link->group, 'notes' => $link->notes,
+            'icon' => $link->icon, 'on_dashboard' => (bool) $link->on_dashboard,
+        ];
+    }
+
     public static function server(Server $server): array
     {
         $status = StatusView::of($server);
@@ -28,6 +37,7 @@ final class Present
             'ssh_command' => $server->sshCommand(),
             'notes' => $server->notes,
             'monitor' => (bool) $server->monitor,
+            'on_dashboard' => (bool) $server->on_dashboard,
             'check_ssh' => (bool) $server->check_ssh,
             'icon' => $server->icon,
             'state' => $status['state'],
@@ -61,7 +71,10 @@ final class Present
             'websockets' => $service->websockets,
             'notes' => $service->notes,
             'health_path' => $service->health_path,
+            'update_project' => $service->update_project,
+            'update_template' => $service->update_template,
             'monitor' => (bool) $service->monitor,
+            'on_dashboard' => (bool) $service->on_dashboard,
             'check_tcp' => (bool) $service->check_tcp,
             'icon' => $service->icon,
             'open_url' => $service->openUrl(),

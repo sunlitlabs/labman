@@ -27,16 +27,18 @@ class StatusController extends Controller
             Access::deny($request);
         }
 
+        // The dashboard passes scope=dashboard so its summary counts only what it shows; the admin lists see everything.
+        $onlyDashboard = $request->query('scope') === 'dashboard';
         $payload = ['interval' => Settings::interval(), 'now' => now()->toIso8601String()];
 
         if ($canServices) {
-            $services = Service::all();
+            $services = Service::query()->when($onlyDashboard, fn ($q) => $q->where('on_dashboard', true))->get();
             $payload['services'] = $services->map(fn ($s) => StatusView::of($s))->values();
             $payload['summary']['services'] = StatusView::summary($services);
         }
 
         if ($canServers) {
-            $servers = Server::all();
+            $servers = Server::query()->when($onlyDashboard, fn ($q) => $q->where('on_dashboard', true))->get();
             $payload['servers'] = $servers->map(fn ($s) => StatusView::of($s))->values();
             $payload['summary']['servers'] = StatusView::summary($servers);
         }

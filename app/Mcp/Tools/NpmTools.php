@@ -7,6 +7,7 @@ use App\Mcp\Tool;
 use App\Mcp\ToolException;
 use App\Models\ProxyLog;
 use App\Npm\Connection;
+use App\Npm\NpmAuto;
 use App\Npm\NpmClient;
 use App\Npm\NpmException;
 use App\Npm\NpmSync;
@@ -84,6 +85,16 @@ final class NpmTools
                     return ['zone' => $z->name, 'connected' => false] + ZoneTools::hint($a, $z);
                 }),
 
+            new Tool('npm_get_auto_update', 'Show the automatic NPM update setting', 'Whether LabMan updates NPM by itself whenever a service, its server\'s address or a certificate changes (one switch for every proxy), and the result of the last automatic update. Automatic updates only add and change proxy hosts; they never delete.',
+                [], [], 'admin', true, false, fn () => self::autoState() + ['last' => NpmAuto::last()]),
+
+            new Tool('npm_set_auto_update', 'Turn automatic NPM updates on or off', 'Switch automatic updates of the connected proxies on or off. On means LabMan writes proxy host changes to NPM by itself when something changes; ask the user first.',
+                ['enabled' => Tool::bool('True to update NPM automatically, false to only use previews.')], ['enabled'], 'admin', false, false, function (array $a) {
+                    NpmAuto::setEnabled((bool) $a['enabled']);
+
+                    return self::autoState();
+                }),
+
             new Tool('npm_import_preview', 'Preview importing from NPM', 'Read-only. Compare a zone\'s NPM proxy hosts with the zone\'s LabMan services and list every service that would be created or updated (no NPM or LabMan data is changed). Show the result to the user, then call npm_import_apply with what they approve.',
                 $zone, [], 'admin', true, false, function (array $a) {
                     $z = ZoneTools::zone($a);
@@ -124,6 +135,12 @@ final class NpmTools
                     });
                 }),
         ];
+    }
+
+    /** @return array{enabled: bool, active: bool, connected: bool} the switch, whether it is acting (needs a connected proxy), and whether any proxy is connected */
+    private static function autoState(): array
+    {
+        return ['enabled' => \App\Support\Secrets::plain('npm.auto') !== '0', 'active' => NpmAuto::enabled(), 'connected' => Connection::anyExists()];
     }
 
     /** Run an NPM operation and turn its failures into tool errors. */

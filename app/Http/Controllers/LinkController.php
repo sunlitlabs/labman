@@ -2,19 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\LinkInput;
 use App\Models\Link;
-use App\Rules\Check;
 use App\Support\Access;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Gate;
 
-/** Plain bookmarks for the dashboard; admins manage them. */
+/** Bookmarks for other web pages. Anyone who may see the dashboard sees the list; only admins change it. */
 class LinkController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('links.index', ['links' => Link::query()->orderBy('group')->orderBy('name')->get()]);
+        if (! Gate::allows('view-screen', 'services') && ! Gate::allows('view-screen', 'servers')) {
+            Access::deny($request);
+        }
+
+        $links = Link::query()->orderBy('group')->orderBy('name')->get();
+
+        return view('links.index', ['links' => $links, 'grouped' => $links->groupBy(fn (Link $l) => $l->group ?: '')]);
     }
 
     public function create()
@@ -53,16 +59,6 @@ class LinkController extends Controller
     {
         abort_unless(Access::isAdmin($request->user()), 403);
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:100', Rule::unique('links', 'name')->ignore($link)],
-            // http(s) only: a bookmark must never be a javascript: or data: address.
-            'url' => ['required', 'string', 'max:2000', 'url:http,https'],
-            'group' => ['nullable', 'string', 'max:60'],
-            'notes' => ['nullable', 'string', 'max:500'],
-            'icon' => ['nullable', 'string', 'max:80', Check::icon()],
-        ]);
-        $data['icon'] = filled($data['icon'] ?? null) ? strtolower($data['icon']) : null;
-
-        return $data;
+        return LinkInput::validate($request->only(['name', 'url', 'group', 'notes', 'icon', 'on_dashboard']), $link);
     }
 }

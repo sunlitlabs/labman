@@ -143,12 +143,12 @@ Two token scopes:
 
 | Scope | Tools |
 |---|---|
-| `read` | `list_services`, `list_servers`, `get_status`, `get_settings`, `export_yaml` |
-| `admin` | everything above plus `run_health_check`; `create/update/delete_server`; `create/update/delete_service`; `update_settings` (including registration mode and per-screen visibility); `import_yaml` (with `dry_run` and `replace`); `list_users`, `create_user`, `update_user` (role, status, password reset), `approve_user`; and the Nginx Proxy Manager tools below |
+| `read` | `list_services`, `list_servers`, `list_links`, `get_status`, `get_settings`, `export_yaml` |
+| `admin` | everything above plus `run_health_check`; `create/update/delete_server`; `create/update/delete_service`; `create/update/delete_link`; `update_settings` (including registration mode and per-screen visibility); `import_yaml` (with `dry_run` and `replace`); `list_users`, `create_user`, `update_user` (role, status, password reset), `approve_user`; and the Nginx Proxy Manager tools below |
 
 - Admin tools use exactly the same validation as the UI (shared code), so an AI cannot store an address, path or SSH user the forms would reject.
 - Tool annotations mark what is read-only and what is destructive, so clients can ask you before deleting, replacing via import, or writing to NPM. The server instructions also tell the assistant to confirm those.
-- **Tokens cannot manage tokens**: there is deliberately no tool for it, so a leaked token cannot mint more.
+- **Tokens cannot manage tokens**: there is deliberately no tool for it, so a leaked token cannot mint more. The other things with no tool on purpose: dismissing admin notices, the zone setup wizard (zones have their own tools) and deleting users (the UI only disables them). Everything else you can do in the admin screens has a tool: servers, services, links, settings, users, zones and mirrors, the NPM connection, sync and automatic-update switch, certificates, the DNS plan, AdGuard Home, the Ansible inventory and the Semaphore connection, runs and host list (`semaphore_get/set/clear_host_sync`, `semaphore_sync_hosts`, `semaphore_list_unknown_hosts`, `semaphore_adopt_hosts`), plus `zone_changes` for the log of what was applied to a proxy.
 - An admin token is only as strong as its owner: if the admin who created it is disabled or demoted it stops working. The "cannot demote or disable yourself / the last admin" guards apply to the token's owner.
 - Rate limited (120 calls a minute per token). Browsers' `Origin` header is checked against LabMan's own origin (DNS-rebinding protection). A signed-in browser session is **not** a credential for `/mcp`.
 
@@ -204,7 +204,9 @@ Limits: one inventory file; LabMan creates groups for LabMan groups (named like 
 
 ## Links
 
-**Links.** For pages that are not services or servers (a network controller, a cloud dashboard), use **Add link** on the dashboard or **Admin > Links**. A link has a name, an http(s) address, an optional group, notes and icon; it appears as a tile on the dashboard, opens in a new tab and is never health-checked.
+**Links.** For pages that are not services or servers (a network controller, a cloud dashboard), use **Add link** on the **Links** tab (next to Servers and Services; the dashboard has the same button). A link has a name, an http(s) address, an optional group, notes and icon; it appears as a tile on the dashboard, opens in a new tab and is never health-checked. Anyone who may see the dashboard can read the Links tab; only admins change links.
+
+**The dashboard.** Tabs (**All**, **Services**, **Servers**, **Links**, with counts) narrow the view, and the search box (press `/`) filters whatever tab you are on, with the counts following the search. Every server, service and link has a **Show on the dashboard** switch on its form (and `on_dashboard` in YAML and over MCP): untick it for something that should not be a tile, for example a service entry for LabMan itself. A hidden item is only kept off the dashboard: it is still monitored, listed in the admin lists, synced to NPM and exported, and it does not count in the dashboard's status banner.
 
 ## Zones
 

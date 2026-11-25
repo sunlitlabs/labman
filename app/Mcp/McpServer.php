@@ -39,6 +39,7 @@ final class McpServer
             \App\Mcp\Tools\InventoryTools::all(),
             \App\Mcp\Tools\ZoneTools::all(),
             \App\Mcp\Tools\AdguardTools::all(),
+            \App\Mcp\Tools\LinkTools::all(),
             \App\Mcp\Tools\SemaphoreTools::all(),
         );
     }

@@ -16,7 +16,7 @@ final class ServiceInput
     private const FLAGS = ['verify_tls' => true, 'public_check' => true, 'websockets' => false];
 
     /** Newer switches: an absent value means "leave as is" (forms always send them), never "off". */
-    private const OPTIONAL_FLAGS = ['monitor' => true, 'check_tcp' => true];
+    private const OPTIONAL_FLAGS = ['monitor' => true, 'check_tcp' => true, 'on_dashboard' => true];
 
     /**
      * Normalise raw input. With $form, an absent checkbox means "off"; otherwise
@@ -110,6 +110,7 @@ final class ServiceInput
             'notes' => ['nullable', 'string', 'max:500'],
             'health_path' => ['nullable', 'string', 'max:500', Check::path()],
             'monitor' => ['boolean'],
+            'on_dashboard' => ['boolean'],
             'check_tcp' => ['boolean'],
             'icon' => ['nullable', 'string', 'max:80', Check::icon()],
             'update_project' => ['nullable', 'integer', 'min:1'],
@@ -204,6 +205,7 @@ final class ServiceInput
             'notes' => $service->notes,
             'health_path' => $service->health_path,
             'monitor' => $service->monitor,
+            'on_dashboard' => $service->on_dashboard,
             'check_tcp' => $service->check_tcp,
             'icon' => $service->icon,
             'update_project' => $service->update_project,

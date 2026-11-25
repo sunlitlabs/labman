@@ -61,6 +61,15 @@
             </section>
 
             <section class="formcard">
+                <h2>Dashboard</h2>
+                <label class="check">
+                    <input type="hidden" name="on_dashboard" value="0">
+                    <input type="checkbox" name="on_dashboard" value="1" @checked((bool) old('on_dashboard', $server->on_dashboard ?? true))>
+                    <span>Show on the dashboard <span class="hint">(untick to keep it off the dashboard; it is still monitored and listed here)</span></span>
+                </label>
+            </section>
+
+            <section class="formcard">
                 <h2>Health</h2>
                 <p class="sub">A server is up when the ports below accept a connection.</p>
                 <label class="check">
