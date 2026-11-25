@@ -13,7 +13,7 @@
             @if ($c)
                 <p class="muted"><span class="mono">{{ $c['url'] }}</span> as <span class="mono">{{ $c['email'] }}</span>
                     @if ($st && $st['state'] === 'error')<span class="warn"> · {{ $st['message'] }}</span>@endif
-                    <a href="{{ route('npm.index', ['zone' => $z->id]) }}">Open its proxy page</a></p>
+                    <a href="{{ route('npm.proxy', $z) }}">Open its proxy page</a></p>
             @else
                 <p class="muted">This zone has no proxy yet. Connect one below, or skip it: nothing else depends on it.</p>
             @endif

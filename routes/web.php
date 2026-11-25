@@ -96,6 +96,8 @@ Route::middleware('admin')->group(function () {
     Route::post('/semaphore/tasks/{project}/{task}/stop', [SemaphoreController::class, 'taskStop'])->whereNumber(['project', 'task'])->name('semaphore.task.stop');
 
     Route::get('/npm', [NpmController::class, 'index'])->name('npm.index');
+    Route::get('/npm/proxies/{zone}', [NpmController::class, 'proxy'])->whereNumber('zone')->name('npm.proxy');
+    Route::get('/npm/proxies/{zone}/edit', [NpmController::class, 'edit'])->whereNumber('zone')->name('npm.proxy.edit');
     Route::post('/npm/connection', [NpmController::class, 'connect'])->name('npm.connect');
     Route::delete('/npm/connection', [NpmController::class, 'disconnect'])->name('npm.disconnect');
     Route::put('/npm/domains', [NpmController::class, 'domains'])->name('npm.domains');

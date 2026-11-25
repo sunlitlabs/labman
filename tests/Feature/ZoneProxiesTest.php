@@ -274,14 +274,18 @@ class ZoneProxiesTest extends TestCase
     {
         $this->connectBoth();
 
-        $this->get(route('npm.index', ['zone' => $this->external->id]))->assertOk()
+        // NPM in general: a row per proxy.
+        $this->get(route('npm.index'))->assertOk()
             ->assertSee('Proxies')->assertSee('Internal')->assertSee('External')->assertSee('connected')
-            ->assertSee(self::URL2)->assertSee('Preview push to all proxies')
+            ->assertSee('Preview push to all proxies')->assertDontSee('name="local_domains[]"', false);
+        // An old ?zone= link lands on that proxy's own page.
+        $this->get(route('npm.index', ['zone' => $this->external->id]))->assertRedirect(route('npm.proxy', $this->external));
+        $this->get(route('npm.proxy', $this->external))->assertOk()
             ->assertSee(route('npm.push', ['zone' => $this->external->id]), false)
             ->assertSee('The External zone')->assertDontSee('name="local_domains[]"', false);
 
         // The default zone's page keeps the domain and certificate settings.
-        $this->get(route('npm.index'))->assertOk()->assertSee('Domains and certificates')->assertSee('Save domains');
+        $this->get(route('npm.proxy', $this->internal))->assertOk()->assertSee('Domains and certificates')->assertSee('Save domains');
     }
 
     public function test_a_single_zone_lab_sees_the_same_addresses_as_before(): void
@@ -291,8 +295,8 @@ class ZoneProxiesTest extends TestCase
         $this->connectBoth();
 
         $this->assertFalse(Zones::multiple());
-        $this->get(route('npm.index'))->assertOk()->assertDontSee('Preview push to all proxies')
-            ->assertSee('href="'.route('npm.push').'"', false);
+        $this->get(route('npm.index'))->assertOk()->assertDontSee('Preview push to all proxies');
+        $this->get(route('npm.proxy', $this->internal))->assertOk()->assertSee('href="'.route('npm.push').'"', false);
     }
 
     // ------------------------------------------------------------------------------ automatic

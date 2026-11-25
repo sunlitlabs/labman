@@ -49,7 +49,7 @@ class DomainListsTest extends TestCase
     {
         $this->configure();
 
-        $html = $this->actingAs($this->admin1())->get('/npm')->assertOk()->assertSee('Add local domain')->assertSee('Add public domain')->getContent();
+        $html = $this->actingAs($this->admin1())->get(route('npm.proxy', \App\Support\Zones::default()))->assertOk()->assertSee('Add local domain')->assertSee('Add public domain')->getContent();
 
         $this->assertStringContainsString('name="local_domains[]" value="home.example.com"', $html);
         $this->assertMatchesRegularExpression('#name="local_default" value="home.example.com"\s+checked#', $html);

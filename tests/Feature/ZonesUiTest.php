@@ -84,7 +84,7 @@ class ZonesUiTest extends TestCase
     {
         $this->connect($this->internal, FakeNpm::URL);
         $this->connect($this->external, self::URL_OUTER);
-        $edit = route('npm.index', ['zone' => $this->external->id]).'#connect';
+        $edit = route('npm.proxy.edit', $this->external);
         $disconnect = route('npm.disconnect', ['zone' => $this->external->id]);
 
         foreach ([route('npm.index'), route('zones.index'), route('zones.show', $this->external)] as $page) {
@@ -98,6 +98,18 @@ class ZonesUiTest extends TestCase
         $this->assertFalse(Connection::exists($this->external));
         $this->assertTrue(Connection::exists($this->internal));
         $this->get(route('npm.index'))->assertSee('Connect', false);
+    }
+
+    public function test_the_connection_form_is_its_own_page_and_saving_returns_to_the_proxy(): void
+    {
+        $this->connect($this->external, self::URL_OUTER);
+
+        $this->get(route('npm.proxy.edit', $this->external))->assertOk()->assertSee('Edit connection')->assertSee(self::URL_OUTER)->assertSee('Cancel')->assertSee('Disconnect')->assertDontSee('npm-secret');
+        $this->get(route('npm.proxy', $this->external))->assertOk()->assertDontSee('id="connect"', false)->assertSee(route('npm.proxy.edit', $this->external));
+        $this->get(route('npm.proxy.edit', $this->internal))->assertOk()->assertSee('Connect');
+
+        $this->post(route('npm.connect', ['zone' => $this->external->id]), ['url' => self::URL_OUTER, 'email' => 'npm@example.com', 'password' => 'npm-secret', 'verify_tls' => 1])
+            ->assertRedirect(route('npm.proxy', $this->external));
     }
 
     public function test_an_unreachable_proxy_degrades_only_its_own_card(): void
@@ -121,7 +133,7 @@ class ZonesUiTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString(route('zones.edit', $this->external), $page);
-        $this->assertStringContainsString(route('npm.index', ['zone' => $this->external->id]).'#connect', $page);
+        $this->assertStringContainsString(route('npm.proxy.edit', $this->external), $page);
     }
 
     // --------------------------------------------------------------------------- a zone's page

@@ -10,8 +10,8 @@
         <a class="btn" href="{{ route('zones.index') }}">All zones</a>
         <a class="btn" href="{{ route('zones.edit', $z) }}">Edit zone</a>
         @if ($card['connected'])
-            <a class="btn" href="{{ route('npm.index', ['zone' => $z->id]) }}">Its proxy</a>
-            <a class="btn" href="{{ route('npm.index', ['zone' => $z->id]) }}#connect">Edit proxy connection</a>
+            <a class="btn" href="{{ route('npm.proxy', $z) }}">Its proxy</a>
+            <a class="btn" href="{{ route('npm.proxy.edit', $z) }}">Edit proxy connection</a>
             <form method="POST" action="{{ route('npm.disconnect', ['zone' => $z->id]) }}" class="inline-form">
                 @csrf @method('DELETE')
                 <button class="btn-danger" type="submit" data-confirm>Disconnect proxy</button>
@@ -38,7 +38,7 @@
         @if (! $card['connected'])
             <div class="card empty">
                 <p>This zone has no proxy yet. Connect its Nginx Proxy Manager to preview and push hosts, see its certificates and check for drift.</p>
-                <div class="actions"><a class="btn primary" href="{{ route('npm.index', ['zone' => $z->id]) }}#connect">Connect a proxy</a></div>
+                <div class="actions"><a class="btn primary" href="{{ route('npm.proxy.edit', $z) }}">Connect a proxy</a></div>
             </div>
         @elseif ($st === null)
             <p class="muted">The proxy has not been checked yet. <em>Refresh status</em> asks it now.</p>

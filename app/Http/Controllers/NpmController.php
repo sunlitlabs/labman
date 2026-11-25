@@ -24,9 +24,25 @@ use Illuminate\Validation\ValidationException;
  */
 class NpmController extends Controller
 {
+    /** NPM in general: every zone's proxy with its status, the automatic-update switch, and the previews of all proxies. */
     public function index(Request $request)
     {
-        $zone = $this->zone($request);
+        // Older links carry ?zone=: they mean that proxy's own page.
+        if (filled($request->query('zone'))) {
+            return redirect()->route('npm.proxy', ['zone' => (int) $request->query('zone')]);
+        }
+
+        $proxies = Zones::all()->map(fn (Zone $z) => ProxyStatus::of($z))->all();
+
+        return view('npm.index', [
+            'proxies' => $proxies, 'connected' => count(array_filter($proxies, fn ($p) => $p['state'] !== 'none')),
+            'auto' => NpmAuto::enabled(), 'last' => NpmAuto::last(),
+        ]);
+    }
+
+    /** One proxy: its connection, previews, certificates and domains. */
+    public function proxy(Zone $zone)
+    {
         $connection = Connection::summary($zone);
 
         // The certificate pickers need NPM's list; without a (working) connection the page falls back to ids.
@@ -42,12 +58,16 @@ class NpmController extends Controller
             }
         }
 
-        return view('npm.index', [
+        return view('npm.proxy', [
             'zone' => $zone, 'zones' => Zones::all(), 'zp' => $this->zp($zone),
             'connection' => $connection, 'certificates' => $certificates, 'certReport' => $report, 'values' => \App\Support\Settings::all(),
-            'auto' => NpmAuto::enabled(), 'last' => NpmAuto::last(),
-            'proxies' => Zones::multiple() ? Zones::all()->map(fn (Zone $z) => ProxyStatus::of($z))->all() : [],
         ]);
+    }
+
+    /** The connection form of one proxy, on its own page. */
+    public function edit(Zone $zone)
+    {
+        return view('npm.edit', ['zone' => $zone, 'zones' => Zones::all(), 'connection' => Connection::summary($zone)]);
     }
 
     public function connect(Request $request): RedirectResponse
@@ -77,7 +97,7 @@ class NpmController extends Controller
         }
 
         // A new connection goes straight to the guided sync; changing details of an existing one stays here.
-        return redirect()->route($first ? 'npm.wizard' : 'npm.index', $this->zp($zone))->with('status', "Connected to Nginx Proxy Manager {$version}".(Zones::multiple() ? " for the {$zone->name} zone" : '').'.');
+        return redirect()->route($first ? 'npm.wizard' : 'npm.proxy', $first ? $this->zp($zone) : ['zone' => $zone->id])->with('status', "Connected to Nginx Proxy Manager {$version}".(Zones::multiple() ? " for the {$zone->name} zone" : '').'.');
     }
 
     /** The guided sync: everything that can be matched up between NPM and LabMan, with defaults chosen. */
@@ -147,14 +167,14 @@ class NpmController extends Controller
             default => ' Automatic updates are off, so use the push preview to send the certificate change to NPM.',
         };
 
-        return redirect()->route('npm.index')->with('status', 'Domains saved.'.$note);
+        return redirect()->route('npm.proxy', ['zone' => (Zones::default() ?? abort(404))->id])->with('status', 'Domains saved.'.$note);
     }
 
     public function auto(Request $request): RedirectResponse
     {
         NpmAuto::setEnabled($request->boolean('auto'));
 
-        return redirect()->route('npm.index', $this->zp($this->zone($request)))->with('status', $request->boolean('auto') ? 'LabMan will now update NPM whenever a service changes.' : 'Automatic updates to NPM are off. Use the guided sync or the push preview.');
+        return redirect()->route('npm.index')->with('status', $request->boolean('auto') ? 'LabMan will now update NPM whenever a service changes.' : 'Automatic updates to NPM are off. Use the guided sync or the push preview.');
     }
 
     public function disconnect(Request $request): RedirectResponse

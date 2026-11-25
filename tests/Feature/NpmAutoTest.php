@@ -103,7 +103,7 @@ class NpmAutoTest extends TestCase
         $this->npm->requests = [];
 
         $this->put('/npm/domains', ['local_domains' => 'home.example.com', 'public_domains' => 'example.org', 'npm_cert_local' => '4', 'npm_cert_public' => '7'])
-            ->assertRedirect(route('npm.index'));
+            ->assertRedirect(route('npm.proxy', \App\Support\Zones::default()));
 
         $this->assertSame(4, $this->host($localId)['certificate_id'], 'the local certificate follows the setting');
         $this->assertSame(7, $this->host($publicHost)['certificate_id'], 'public hosts are left alone');
@@ -169,6 +169,7 @@ class NpmAutoTest extends TestCase
     public function test_the_domains_live_on_the_npm_page_not_in_general_settings(): void
     {
         $this->get('/settings')->assertOk()->assertDontSee('Add local domain');
-        $this->get('/npm')->assertOk()->assertSee('Add local domain')->assertSee('Keep NPM up to date');
+        $this->get(route('npm.proxy', \App\Support\Zones::default()))->assertOk()->assertSee('Add local domain');
+        $this->get('/npm')->assertOk()->assertSee('Keep NPM up to date');
     }
 }

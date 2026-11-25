@@ -39,7 +39,7 @@
                     <div class="card check-result check-failed" role="status">
                         <p class="check-line"><strong>{{ $zone->name }} could not be checked.</strong></p>
                         <p class="warn">{{ $s['error'] }}</p>
-                        <p class="hint">The other proxies are not affected. <a href="{{ route('npm.index', ['zone' => $zone->id]) }}">Check this connection</a></p>
+                        <p class="hint">The other proxies are not affected. <a href="{{ route('npm.proxy', $zone) }}">Check this connection</a></p>
                     </div>
                 @else
                     <div class="card check-result {{ $actionable->isEmpty() ? 'inv-ok' : '' }}" role="status">

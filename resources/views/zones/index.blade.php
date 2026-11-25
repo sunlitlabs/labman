@@ -81,7 +81,7 @@
                 <div class="actions">
                     <a class="btn" href="{{ route('zones.show', $z) }}">Open</a>
                     <a class="btn" href="{{ route('zones.edit', $z) }}">Edit</a>
-                    <a class="btn" href="{{ route('npm.index', ['zone' => $z->id]) }}#connect">{{ $c['connected'] ? 'Edit proxy connection' : 'Connect a proxy' }}</a>
+                    <a class="btn" href="{{ route('npm.proxy.edit', $z) }}">{{ $c['connected'] ? 'Edit proxy connection' : 'Connect a proxy' }}</a>
                 </div>
             </article>
         @endforeach

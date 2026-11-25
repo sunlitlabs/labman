@@ -174,7 +174,7 @@ class DomainsTest extends TestCase
             ['id' => 7, 'nice_name' => 'Cloudflare', 'domain_names' => ['example.org', '*.example.org']],
         ];
 
-        $this->actingAs(\App\Models\User::where('role', 'admin')->first())->get('/npm')->assertOk()
+        $this->actingAs(\App\Models\User::where('role', 'admin')->first())->get(route('npm.proxy', \App\Support\Zones::default()))->assertOk()
             ->assertSee('Local wildcard')->assertSee('Cloudflare')->assertSee('Local domains');
     }
 
@@ -183,7 +183,7 @@ class DomainsTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)->put('/npm/domains', ['local_domains' => 'home.example.com', 'public_domains' => 'example.org', 'npm_cert_local' => '', 'npm_cert_public' => ''])
-            ->assertSessionHasNoErrors()->assertRedirect(route('npm.index'));
+            ->assertSessionHasNoErrors()->assertRedirect(route('npm.proxy', \App\Support\Zones::default()));
 
         $this->assertSame(['home.example.com'], Domains::local());
 

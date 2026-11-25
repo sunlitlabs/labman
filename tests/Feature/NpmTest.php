@@ -81,7 +81,7 @@ class NpmTest extends TestCase
         }
 
         // ...and never shown, exported or listed.
-        $this->actingAs($this->admin)->get('/npm')->assertOk()->assertSee('npm@example.com')->assertDontSee('npm-secret');
+        $this->actingAs($this->admin)->get(route('npm.proxy', \App\Support\Zones::default()))->assertOk()->assertSee('npm@example.com')->assertDontSee('npm-secret');
         $this->assertStringNotContainsString('npm', YamlConfig::export());
         $this->assertArrayNotHasKey('npm.password', \App\Support\Settings::all());
         $this->assertArrayNotHasKey('password', Connection::summary());

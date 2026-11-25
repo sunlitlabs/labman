@@ -469,7 +469,7 @@ class CertificatesTest extends TestCase
         $bare = $this->service('Bare');
         $bare->update(['npm_host_id' => $this->npm->addHost(['domain_names' => ['bare.home.example.com'], 'forward_host' => '192.0.2.50', 'forward_port' => 80, 'certificate_id' => 0])]);
 
-        $this->get(route('npm.index'))->assertOk()->assertSee('Certificates')->assertSee('1 to look at')->assertSee('bare.home.example.com')
+        $this->get(route('npm.proxy', \App\Support\Zones::default()))->assertOk()->assertSee('Certificates')->assertSee('1 to look at')->assertSee('bare.home.example.com')
             ->assertSee('Preview the fixes')->assertSee('nothing is requested until you apply a previewed change');
     }
 
