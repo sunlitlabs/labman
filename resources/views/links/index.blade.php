@@ -1,8 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', 'Links')
 
-@section('content')
+@section('admin')
     <h1>Links</h1>
     <p class="muted">Bookmarks for things that are not services or servers, like a network controller or a cloud dashboard. They appear on the dashboard and are never health-checked.</p>
 

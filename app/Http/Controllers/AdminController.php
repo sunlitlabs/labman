@@ -37,6 +37,11 @@ class AdminController extends Controller
                 'action' => Secrets::plain('npm.url') !== null ? 'Open' : 'Set up', 'to' => 'npm.index',
             ];
             $cards[] = [
+                'title' => 'AdGuard Home', 'route' => 'dns.adguard', 'on' => Secrets::plain('adguard.url') !== null,
+                'detail' => Secrets::plain('adguard.url') ?: 'Write the DNS plan\'s inside records to AdGuard Home as rewrites, with a preview.',
+                'action' => Secrets::plain('adguard.url') !== null ? 'Open' : 'Set up', 'to' => 'dns.adguard',
+            ];
+            $cards[] = [
                 'title' => 'AI access (MCP)', 'route' => 'settings.mcp', 'on' => AdminNav::tokenCount() > 0,
                 'detail' => AdminNav::tokenCount() > 0 ? AdminNav::tokenCount().' API token(s)' : 'Create a token to let an AI assistant manage LabMan.',
                 'action' => AdminNav::tokenCount() > 0 ? 'Manage' : 'Create a token', 'to' => 'settings.mcp',

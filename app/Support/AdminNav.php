@@ -35,7 +35,7 @@ final class AdminNav
         if ($admin) {
             $site[] = self::item('Links', 'links.index', ['links.*'], 'Bookmarks for other web pages on the dashboard');
             $site[] = self::item('Zones', 'zones.index', ['zones.*'], 'Trust levels that servers belong to');
-            $site[] = self::item('DNS plan', 'dns.index', ['dns.*'], 'The DNS records the zones need');
+            $site[] = self::item('DNS plan', 'dns.index', ['dns.index', 'dns.export', 'dns.owner', 'dns.propose'], 'The DNS records the zones need');
             $sections[0]['items'] = $site;
 
             $sections[] = ['title' => 'Integrations', 'items' => [
@@ -43,6 +43,7 @@ final class AdminNav
                 self::item('Workbooks', 'workbooks.index', ['workbooks.*'], 'Run Semaphore playbooks on your servers'),
                 self::item('Semaphore', 'semaphore.index', ['semaphore.*'], 'Connection and host list', status: Secrets::plain('semaphore.url') !== null),
                 self::item('Nginx Proxy Manager', 'npm.index', ['npm.*'], 'Import and push proxy hosts', status: Secrets::plain('npm.url') !== null),
+                self::item('AdGuard Home', 'dns.adguard', ['dns.adguard*'], 'Write the DNS plan as rewrites', status: Secrets::plain('adguard.url') !== null),
             ]];
 
             $sections[] = ['title' => 'Tools', 'items' => [

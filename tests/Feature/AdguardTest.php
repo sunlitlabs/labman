@@ -161,6 +161,18 @@ class AdguardTest extends TestCase
         $this->assertFalse(AdguardConnection::exists());
     }
 
+    public function test_it_is_listed_as_an_integration_with_its_status(): void
+    {
+        $this->get(route('admin.index'))->assertOk()->assertSee('AdGuard Home')->assertSee(route('dns.adguard'));
+        $this->assertNotEmpty(collect(\App\Support\AdminNav::sections(auth()->user()))->firstWhere('title', 'Integrations')['items'] ?? []);
+
+        $find = fn () => collect(\App\Support\AdminNav::sections(auth()->user()))->firstWhere('title', 'Integrations')['items'];
+        $item = fn () => collect($find())->firstWhere('route', 'dns.adguard');
+        $this->assertFalse($item()['status']);
+        $this->connect();
+        $this->assertTrue($item()['status']);
+    }
+
     public function test_preview_without_a_connection_sends_you_to_connect(): void
     {
         $this->get(route('dns.adguard.preview'))->assertRedirect(route('dns.adguard'));

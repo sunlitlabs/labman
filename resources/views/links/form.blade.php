@@ -1,8 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('title', $link->exists ? 'Edit link' : 'Add link')
 
-@section('content')
+@section('admin')
     <div class="wide">
         <h1>{{ $link->exists ? 'Edit '.$link->name : 'Add link' }}</h1>
 
