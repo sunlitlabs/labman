@@ -442,6 +442,9 @@ table.plain th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 
 .tile-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .tile-name { font-weight: 650; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-sub { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0.04em; flex: none; background: var(--unknown); opacity: 0.55; }
+.dot[data-dot-state="up"] { background: var(--up); opacity: 1; }
+.dot[data-dot-state="down"] { background: var(--down); opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--down) 22%, transparent); }
 .tile-detail { color: var(--down); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-detail:empty, .tile[data-state="up"] .tile-detail, .tile[data-state="off"] .tile-detail, .tile[data-state="unknown"] .tile-detail { display: none; }
 .tile[data-state="degraded"] .tile-detail { color: var(--degraded); }

@@ -462,10 +462,46 @@
     });
   }
 
+  // Mirrors App\Monitoring\Dots: which of a tile's names and address is the one with a problem.
+  function dotsOf(kind, item) {
+    var checks = item.checks || [];
+    var hasLocal = checks.some(function (c) { return c.label.indexOf('local') === 0; });
+    var groups = { backend: [], name: [], public: [] };
+    checks.forEach(function (c) {
+      var l = c.label;
+      if (kind === 'servers' || l === 'backend' || l.indexOf('tcp') === 0) groups.backend.push(c);
+      else if (l.indexOf('local') === 0 || (l === 'public' && !hasLocal)) groups.name.push(c);
+      else if (l.indexOf('public') === 0) groups.public.push(c);
+    });
+    var out = {};
+    Object.keys(groups).forEach(function (key) {
+      var list = groups[key];
+      if (!list.length || item.state === 'off') {
+        out[key] = { state: 'unknown', title: item.state === 'off' ? 'Not monitored' : 'Not checked' };
+        return;
+      }
+      var any = list.some(function (c) { return c.ok; });
+      var all = list.every(function (c) { return c.ok; });
+      out[key] = {
+        state: (key === 'backend' && kind === 'services' ? any : all) ? 'up' : 'down',
+        title: list.map(function (c) { return c.label + ': ' + c.detail; }).join(', ')
+      };
+    });
+    return out;
+  }
+
   function applyItem(kind, item) {
     var row = document.querySelector('[data-kind="' + kind + '"][data-id="' + item.id + '"]');
     if (!row) return;
     row.setAttribute('data-state', item.state);
+    var dots = row.querySelectorAll('[data-dot]');
+    if (dots.length) {
+      var d = dotsOf(kind, item);
+      dots.forEach(function (dot) {
+        var s = d[dot.getAttribute('data-dot')];
+        if (s) { dot.setAttribute('data-dot-state', s.state); dot.title = s.title; }
+      });
+    }
     var pill = row.querySelector('[data-pill]');
     if (pill) {
       var stale = item.stale && item.state !== 'off';

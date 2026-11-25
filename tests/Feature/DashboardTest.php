@@ -103,6 +103,29 @@ class DashboardTest extends TestCase
         $this->assertStringContainsString('data-status-url="'.route('status', ['scope' => 'dashboard']).'"', $html);
     }
 
+    public function test_dots_show_which_name_or_address_has_the_problem(): void
+    {
+        $ok = ['ok' => true, 'ms' => 5, 'detail' => 'HTTP 200'];
+        $bad = ['ok' => false, 'ms' => null, 'detail' => 'could not resolve host'];
+
+        $d = \App\Monitoring\Dots::service([['label' => 'backend'] + $ok, ['label' => 'local'] + $bad, ['label' => 'public'] + $ok], 'degraded');
+        $this->assertSame(['up', 'down', 'up'], [$d['backend']['state'], $d['name']['state'], $d['public']['state']]);
+        $this->assertStringContainsString('could not resolve host', $d['name']['title']);
+
+        $lone = \App\Monitoring\Dots::service([['label' => 'backend'] + $ok, ['label' => 'public'] + $bad], 'degraded');
+        $this->assertSame(['up', 'down', 'unknown'], [$lone['backend']['state'], $lone['name']['state'], $lone['public']['state']]);
+
+        $this->assertSame('up', \App\Monitoring\Dots::service([['label' => 'backend'] + $bad, ['label' => 'tcp :80'] + $ok], 'up')['backend']['state']);
+        $this->assertSame('down', \App\Monitoring\Dots::server([['label' => 'ssh :22'] + $bad], 'down')['state']);
+        $this->assertSame('unknown', \App\Monitoring\Dots::server([], 'off')['state']);
+
+        $this->actingAs($this->admin());
+        $service = Service::create(['name' => 'Wiki', 'address' => '192.0.2.50', 'domain' => 'wiki.example.com', 'scheme' => 'http', 'path' => '/']);
+        $service->forceFill(['state' => 'degraded', 'checked_at' => now(), 'checks' => [['label' => 'backend'] + $ok, ['label' => 'public'] + $bad]])->save();
+
+        $this->get('/')->assertOk()->assertSee('data-dot="name" data-dot-state="down"', false)->assertSee('data-dot="backend" data-dot-state="up"', false);
+    }
+
     public function test_a_single_kind_needs_no_tabs(): void
     {
         $this->actingAs($this->admin());

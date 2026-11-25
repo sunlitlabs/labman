@@ -82,19 +82,20 @@
                         @php($open = $service->openUrl())
                         @php($st = \App\Monitoring\StatusView::of($service))
                         @php($bad = collect($st['checks'])->firstWhere('ok', false))
+                        @php($dots = \App\Monitoring\Dots::service($st['checks'], $st['state']))
                         <article class="tile {{ $open ? 'clickable' : '' }}" data-kind="services" data-id="{{ $service->id }}" data-state="{{ $st['state'] }}"
                                  @if ($open) data-href="{{ $open }}" tabindex="0" role="link" aria-label="Open {{ $service->name }}" @endif
                                  data-filter="{{ strtolower(implode(' ', [$service->name, $service->domain, $service->public_domain, $service->backendAddress(), $service->group, $service->notes, 'service'])) }}">
                             @include('partials.icon', ['model' => $service])
                             <div class="tile-body">
                                 <span class="tile-name">{{ $service->name }}</span>
-                                <small class="tile-sub">{{ $service->domain ?: $service->public_domain ?: ($service->backendAddress() ? \App\Support\Hosts::forUrl($service->backendAddress()).':'.$service->effectivePort() : 'no address') }}</small>
+                                <small class="tile-sub">@if ($service->domain || $service->public_domain)<span class="dot" data-dot="name" data-dot-state="{{ $dots['name']['state'] }}" title="{{ $dots['name']['title'] }}"></span>@else<span class="dot" data-dot="backend" data-dot-state="{{ $dots['backend']['state'] }}" title="{{ $dots['backend']['title'] }}"></span>@endif{{ $service->domain ?: $service->public_domain ?: ($service->backendAddress() ? \App\Support\Hosts::forUrl($service->backendAddress()).':'.$service->effectivePort() : 'no address') }}</small>
                                 <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
                                 @if ($service->backendUrl() && ($service->domain || $service->public_domain))
-                                    <a class="tile-ip mono" href="{{ $service->backendUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the backend directly, bypassing the domain name">{{ \App\Support\Hosts::forUrl($service->backendAddress()) }}:{{ $service->effectivePort() }}</a>
+                                    <a class="tile-ip mono" href="{{ $service->backendUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the backend directly, bypassing the domain name"><span class="dot" data-dot="backend" data-dot-state="{{ $dots['backend']['state'] }}" title="{{ $dots['backend']['title'] }}"></span>{{ \App\Support\Hosts::forUrl($service->backendAddress()) }}:{{ $service->effectivePort() }}</a>
                                 @endif
                                 @if ($service->domain && $service->public_domain)
-                                    <a class="tile-public" href="{{ $service->publicDomainUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the public address">{{ $service->public_domain }}</a>
+                                    <a class="tile-public" href="{{ $service->publicDomainUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the public address"><span class="dot" data-dot="public" data-dot-state="{{ $dots['public']['state'] }}" title="{{ $dots['public']['title'] }}"></span>{{ $service->public_domain }}</a>
                                 @endif
                             </div>
                             <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>
@@ -114,13 +115,14 @@
                         @php($ssh = $server->sshCommand())
                         @php($st = \App\Monitoring\StatusView::of($server))
                         @php($bad = collect($st['checks'])->firstWhere('ok', false))
+                        @php($dot = \App\Monitoring\Dots::server($st['checks'], $st['state']))
                         <article class="tile clickable" tabindex="0" role="button" data-kind="servers" data-id="{{ $server->id }}" data-state="{{ $st['state'] }}"
                                  data-ssh="{{ $ssh }}" aria-label="Copy SSH command for {{ $server->name }}: {{ $ssh }}"
                                  data-filter="{{ strtolower(implode(' ', [$server->name, $server->domain, $server->address, $server->group, $server->notes, 'server'])) }}">
                             @include('partials.icon', ['model' => $server])
                             <div class="tile-body">
                                 <span class="tile-name">{{ $server->name }}</span>
-                                <a class="tile-sub mono" href="{{ $server->addressUrl() }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->address }}">{{ $server->address }}</a>
+                                <a class="tile-sub mono" href="{{ $server->addressUrl() }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->address }}"><span class="dot" data-dot="backend" data-dot-state="{{ $dot['state'] }}" title="{{ $dot['title'] }}"></span>{{ $server->address }}</a>
                                 <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
                             </div>
                             <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>
