@@ -20,7 +20,7 @@
 <header class="top">
     <div class="top-inner">
         <a class="brand" href="{{ url('/') }}"><img class="brand-mark" src="{{ asset('favicon.svg') }}" alt="" width="26" height="26">{{ \App\Support\Settings::title() }}</a>
-        @unless (request()->is('setup'))
+        @unless (request()->is('setup') || \App\Node\Mode::isNode())
         <nav class="nav" aria-label="Main">
             @if (Gate::allows('view-screen', 'services') || Gate::allows('view-screen', 'servers'))
                 <a href="{{ route('home') }}" @if(request()->routeIs('home')) aria-current="page" @endif>Dashboard</a>

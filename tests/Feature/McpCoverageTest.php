@@ -55,6 +55,7 @@ class McpCoverageTest extends TestCase
         'servers' => ['list_servers', 'create_server', 'update_server', 'delete_server'],
         'services' => ['list_services', 'create_service', 'update_service', 'delete_service', 'diagnose_service'],
         'links' => ['list_links', 'create_link', 'update_link', 'delete_link'],
+        'nodes' => ['node_list', 'node_save', 'node_push', 'node_remove'],
         'settings and access' => ['get_settings', 'update_settings'],
         'users' => ['list_users', 'create_user', 'update_user', 'approve_user'],
         'status and health' => ['get_status', 'run_health_check'],

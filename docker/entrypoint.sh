@@ -30,12 +30,14 @@ fi
 
 php artisan migrate --force --no-interaction
 
-# Resident health-check loop, restarted if it ever exits.
-(
-    while true; do
-        php artisan labman:monitor || true
-        sleep 2
-    done
-) &
+# Resident health-check loop, restarted if it ever exits (a node runs none: the main LabMan pushes its results).
+if [ "${LABMAN_MODE:-main}" != "node" ]; then
+    (
+        while true; do
+            php artisan labman:monitor || true
+            sleep 2
+        done
+    ) &
+fi
 
 exec frankenphp run --config /etc/caddy/Caddyfile --adapter caddyfile

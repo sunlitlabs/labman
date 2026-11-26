@@ -15,6 +15,11 @@ final class Access
 {
     public static function allows(?User $user, string $screen): bool
     {
+        // A node is a public, read-only dashboard.
+        if (\App\Node\Mode::isNode()) {
+            return in_array($screen, ['services', 'servers'], true);
+        }
+
         return match (Settings::visibility($screen)) {
             'everyone' => true,
             'users' => $user?->isActive() === true,
@@ -24,6 +29,10 @@ final class Access
 
     public static function isAdmin(?User $user): bool
     {
+        if (\App\Node\Mode::isNode()) {
+            return false;
+        }
+
         return $user !== null && $user->isActive() && $user->isAdmin();
     }
 

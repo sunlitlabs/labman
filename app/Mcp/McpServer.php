@@ -40,6 +40,7 @@ final class McpServer
             \App\Mcp\Tools\ZoneTools::all(),
             \App\Mcp\Tools\AdguardTools::all(),
             \App\Mcp\Tools\LinkTools::all(),
+            \App\Mcp\Tools\NodeTools::all(),
             \App\Mcp\Tools\SemaphoreTools::all(),
         );
     }

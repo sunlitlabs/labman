@@ -24,6 +24,12 @@ class MonitorCommand extends Command
             }
         }
 
+        if (\App\Node\Mode::isNode()) {
+            $this->line('Node mode: this install shows what the main LabMan pushes and runs no health checks of its own.');
+
+            return self::SUCCESS;
+        }
+
         do {
             $started = microtime(true);
 
@@ -41,6 +47,12 @@ class MonitorCommand extends Command
 
             try {
                 \App\Icons\Icons::refresh(); // a no-op unless the icon index is missing or a week old
+            } catch (Throwable $e) {
+                report($e);
+            }
+
+            try {
+                \App\Node\NodePush::all(); // keeps the zone dashboards (nodes) in step with what was just checked
             } catch (Throwable $e) {
                 report($e);
             }

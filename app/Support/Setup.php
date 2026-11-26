@@ -12,6 +12,10 @@ final class Setup
 
     public static function isComplete(): bool
     {
+        if (\App\Node\Mode::isNode()) {
+            return true; // a node has no accounts and no setup
+        }
+
         if (self::$complete) {
             return true; // monotonic: once true it never goes back
         }

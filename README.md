@@ -214,6 +214,28 @@ Limits: one inventory file; LabMan creates groups for LabMan groups (named like 
 - **More addresses:** a server or service can list further addresses, each with an optional label and domain (for example a PiKVM on LAN and on Wi-Fi). The main address stays the preferred one and drives the status. Each further address shows on the tile with its own status dot and link (its domain if it has one). A down further address never turns an item yellow, but if the main address is dead and another one answers the item shows as degraded rather than down. In YAML: `alternates: [{label, address, domain}]`; over MCP: `alternates` on the server and service tools. Further addresses are not written to DNS or Nginx Proxy Manager.
 - **Same as:** give services the same "Same as" name (`family:` in YAML) and a card with two or more of them shows one tile, with a status dot per member and the worst state on the tile. For example, one Nginx Proxy Manager per zone.
 - **Zone badges:** in a zone's settings, "Show zone badges to people on this network" turns on, for anyone opening the dashboard from an address in that zone's network blocks, a zone badge on each item and a Groups / Zones switch that arranges the cards by zone (most trusted first). Leave it off for zones that do not need it. Admins can preview with `/?indicator=1`.
+## Nodes (a dashboard inside each zone)
+
+The same image also runs as a **node**: a small read-only dashboard for one network zone, with no sign-in, no admin pages and no health checks of its own. The main LabMan keeps it up to date by pushing, after every health-check round, the zone's services, servers and links with their current status. Give the node its own domain by listing it as a service in the main LabMan.
+
+On the node's host, start the container with two extra variables (everything else is the same as the main install):
+
+```yaml
+services:
+  labman-node:
+    image: ghcr.io/sunlitlabs/labman:latest   # or build from this repository
+    environment:
+      LABMAN_MODE: node
+      LABMAN_NODE_TOKEN: <a long random secret, at least 16 characters>
+    ports: ["8080:80"]
+    volumes: ["./data:/data"]
+```
+
+In the main LabMan open Admin → Nodes → Add node: give the node's address (for example `http://192.0.2.60:8080`), the same token, and the zone it shows. LabMan sends the dashboard right away, then keeps it current. **Send now** pushes on demand; the list shows whether the last push worked and why not. In MCP: `node_list`, `node_save`, `node_push` and `node_remove`.
+
+- A node accepts pushes only with the token, and every page other than the dashboard answers 404. What is pushed contains no connections, tokens or users (see `app/Node/NodeSnapshot.php` for the exact fields); it does include the zones' network blocks, so the node can show zone badges to the people who ask for them.
+- The status on a node is the status the main LabMan measured. If the main server stops pushing, the node's dots turn stale after a few minutes rather than showing old results as fresh.
+- A node does not yet run checks from inside its own zone; that would catch services only reachable from there, and is a natural next step.
 ## Zones
 
 **How zones work.** Servers belong to zones, and a service follows its server. Each zone can have its own proxy (an Nginx Proxy Manager), its own domains (for example `lab.example.com` inside, `example.dev` public) and its own certificate policy. A name belongs to the zone with the longest matching domain, and an exact tie is settled by picking an owner. To let people in one zone reach a host another zone publishes, by the same name, the first zone's proxy mirrors it. A lab with one zone sees no change anywhere. The quickest way in is the setup wizard (**Admin > Zones**). Everything that changes a proxy is previewed first and applied only for the items you approve; a proxy host is deleted only if LabMan created it and you ticked that previewed item; secrets are never shown, exported or returned over MCP; and LabMan lists DNS records but does not write them. The paragraphs below cover each part.

@@ -12,7 +12,7 @@ use App\Models\User;
 final class AdminNav
 {
     /** Route-name patterns that belong to the admin panel (the main nav highlights "Admin" on any of them). */
-    public const ROUTES = ['admin.*', 'settings.*', 'users.*', 'inventory.*', 'semaphore.*', 'workbooks.*', 'npm.*', 'tokens.*', 'zones.*', 'dns.*'];
+    public const ROUTES = ['admin.*', 'settings.*', 'users.*', 'inventory.*', 'semaphore.*', 'workbooks.*', 'npm.*', 'tokens.*', 'zones.*', 'dns.*', 'nodes.*'];
 
     /**
      * @return list<array{title: string, items: list<array{label: string, route: string, match: list<string>, status: ?bool, badge: int, hint: string}>}>
@@ -42,6 +42,7 @@ final class AdminNav
                 self::item('Workbooks', 'workbooks.index', ['workbooks.*'], 'Run Semaphore playbooks on your servers'),
                 self::item('Semaphore', 'semaphore.index', ['semaphore.*'], 'Connection and host list', status: Secrets::plain('semaphore.url') !== null),
                 self::item('Nginx Proxy Manager', 'npm.index', ['npm.*'], 'Import and push proxy hosts', status: Secrets::plain('npm.url') !== null),
+                self::item('Nodes', 'nodes.index', ['nodes.*'], 'Zone dashboards this server keeps updated', status: \App\Models\Node::query()->exists() ?: null),
                 self::item('AdGuard Home', 'dns.adguard', ['dns.adguard*'], 'Write the DNS plan as rewrites', status: Secrets::plain('adguard.url') !== null),
             ]];
 

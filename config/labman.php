@@ -9,6 +9,13 @@ return [
     'setup_token' => env('LABMAN_SETUP_TOKEN'),
 
     /*
+    | "main" (default) is the full app. "node" is a read-only dashboard for one zone that a main LabMan pushes to;
+    | it needs LABMAN_NODE_TOKEN, the secret the main LabMan sends with every push.
+    */
+    'mode' => env('LABMAN_MODE', 'main') === 'node' ? 'node' : 'main',
+    'node_token' => env('LABMAN_NODE_TOKEN'),
+
+    /*
     | The four screens whose visibility an admin can configure.
     */
     'screens' => ['services', 'servers', 'settings', 'users'],

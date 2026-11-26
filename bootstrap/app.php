@@ -24,7 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             $middleware->trustProxies(at: $proxies === '*' ? '*' : array_map('trim', explode(',', $proxies)));
         }
 
-        $middleware->web(prepend: [RedirectToSetup::class], append: [EnsureUserIsActive::class, SecurityHeaders::class]);
+        $middleware->web(prepend: [\App\Http\Middleware\NodeModeOnly::class, RedirectToSetup::class], append: [EnsureUserIsActive::class, SecurityHeaders::class]);
 
         $middleware->alias([
             'screen' => EnsureScreenAccess::class,
