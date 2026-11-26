@@ -10,6 +10,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\IconController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LinkController;
+use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\MirrorController;
 use App\Http\Controllers\NpmController;
 use App\Http\Controllers\SemaphoreController;
@@ -37,6 +38,9 @@ Route::post('/login', [LoginController::class, 'store'])->name('login.store');
 Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 Route::get('/register', [RegisterController::class, 'show'])->name('register');
 Route::post('/register', [RegisterController::class, 'store'])->name('register.store')->middleware('throttle:10,1');
+
+// Makes the site installable as an app.
+Route::get('/manifest.webmanifest', ManifestController::class)->name('manifest');
 
 // Cached service icons (see App\Icons\Icons).
 Route::get('/icons/{slug}', [IconController::class, 'show'])->where('slug', '[a-z0-9][a-z0-9._-]{0,79}')->name('icons.show');

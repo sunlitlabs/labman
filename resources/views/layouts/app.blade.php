@@ -6,6 +6,12 @@
     <meta name="color-scheme" content="light dark">
     <title>@hasSection('title'){{ trim($__env->yieldContent('title')) }} · @endif{{ \App\Support\Settings::title() }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <link rel="manifest" href="{{ route('manifest') }}">
+    <link rel="apple-touch-icon" href="{{ asset('app-icons/apple-touch-icon.png') }}">
+    <meta name="theme-color" content="#2557d6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="{{ \App\Support\Settings::title() }}">
     <link rel="stylesheet" href="{{ asset('css/labman.css') }}">
     <script src="{{ asset('js/labman.js') }}" defer></script>
     @stack('scripts')
@@ -13,7 +19,7 @@
 <body @yield('body_attrs')>
 <header class="top">
     <div class="top-inner">
-        <a class="brand" href="{{ url('/') }}">{{ \App\Support\Settings::title() }}</a>
+        <a class="brand" href="{{ url('/') }}"><img class="brand-mark" src="{{ asset('favicon.svg') }}" alt="" width="26" height="26">{{ \App\Support\Settings::title() }}</a>
         @unless (request()->is('setup'))
         <nav class="nav" aria-label="Main">
             @if (Gate::allows('view-screen', 'services') || Gate::allows('view-screen', 'servers'))

@@ -2,6 +2,11 @@
 (function () {
   'use strict';
 
+  // Lets the browser offer to install LabMan as an app (the worker caches nothing).
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {}); });
+  }
+
   var body = document.body;
   var toastEl = document.getElementById('toast');
   var toastTimer = null;

@@ -243,6 +243,12 @@ Running is always three steps, in the UI and over MCP:
 Everything sent to Semaphore is validated: host limits may only contain letters, digits and `_ . - * ! & : [ ]` and cannot start with `-`; variable names are checked; the note is one line. Over MCP, `semaphore_run_template` requires `confirm: true`, which the assistant must only set after the user approved that exact run, and it is annotated as destructive so clients ask first.
 
 The Semaphore token acts as its Semaphore user, so use a dedicated user that can run only the templates you want available here.
+## Install as an app
+
+LabMan is a progressive web app. Open it over HTTPS (or `localhost`) and use your browser's **Install** option (Chrome and Edge show an install icon in the address bar; on iOS use Share, then Add to Home Screen). It then opens in its own window with the LabMan icon. The app is named after the site title in Settings. Its service worker caches nothing, so you always see live status and never a stale or signed-in page from a cache.
+
+The logo is drawn by `node tools/make-icons.mjs`, which rewrites `public/favicon.svg` and the PNGs in `public/app-icons/` (no dependencies).
+
 ## How health checks work
 
 Checks run in the background, never when a page loads. `php artisan labman:monitor` is a resident loop started by the container entrypoint (and restarted if it exits); it re-reads the settings every round, so changing the interval needs no restart. Results are stored in the database; the pages render what is stored and the browser polls a small JSON endpoint (`/status`) every interval.
