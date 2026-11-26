@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** A trust level that servers (and through them, services) belong to. */
 class Zone extends Model
 {
-    protected $fillable = ['name', 'level', 'color', 'icon', 'is_default', 'cidrs', 'domains', 'proxy_address', 'notes', 'certificate_policy', 'mirror_sources', 'dns'];
+    protected $fillable = ['name', 'level', 'color', 'icon', 'is_default', 'cidrs', 'domains', 'proxy_address', 'notes', 'certificate_policy', 'mirror_sources', 'dns', 'dashboard_indicator'];
 
     protected function casts(): array
     {
-        return ['level' => 'integer', 'is_default' => 'boolean', 'cidrs' => 'array', 'domains' => 'array', 'certificate_policy' => 'array', 'mirror_sources' => 'array', 'dns' => 'array'];
+        return ['level' => 'integer', 'is_default' => 'boolean', 'dashboard_indicator' => 'boolean', 'cidrs' => 'array', 'domains' => 'array', 'certificate_policy' => 'array', 'mirror_sources' => 'array', 'dns' => 'array'];
     }
 
     public function servers(): HasMany

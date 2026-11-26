@@ -11,7 +11,7 @@ class Server extends Model
 {
     protected $fillable = [
         'name', 'address', 'domain', 'group', 'ports', 'ssh_user', 'ssh_port', 'notes', 'inventory_host',
-        'monitor', 'check_ssh', 'icon', 'extra_domains', 'zone_id', 'on_dashboard',
+        'monitor', 'check_ssh', 'icon', 'extra_domains', 'zone_id', 'on_dashboard', 'alternates',
     ];
 
     protected $attributes = [
@@ -38,6 +38,7 @@ class Server extends Model
         return [
             'ports' => 'array',
             'extra_domains' => 'array',
+            'alternates' => 'array',
             'checks' => 'array',
             'ssh_port' => 'integer',
             'monitor' => 'boolean',

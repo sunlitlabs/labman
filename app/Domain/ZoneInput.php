@@ -44,6 +44,7 @@ final class ZoneInput
             'dns' => ['nullable', 'array'],
             'mirrors' => ['nullable', 'array', 'max:50'],
             'is_default' => ['sometimes', 'boolean'],
+            'dashboard_indicator' => ['sometimes', 'boolean'],
         ]);
         $v->validate();
 
@@ -52,6 +53,9 @@ final class ZoneInput
             if (array_key_exists($key, $in)) {
                 $data[$key] = $key === 'level' ? (int) $in[$key] : (is_string($in[$key]) ? trim($in[$key]) : $in[$key]);
             }
+        }
+        if (array_key_exists('dashboard_indicator', $in)) {
+            $data['dashboard_indicator'] = filter_var($in['dashboard_indicator'], FILTER_VALIDATE_BOOLEAN);
         }
         if (array_key_exists('color', $in)) {
             $data['color'] = filled($in['color']) ? strtolower($in['color']) : null;

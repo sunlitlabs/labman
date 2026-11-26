@@ -13,6 +13,9 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
+        // Code under test raises a time limit for long jobs (set_time_limit); it must not outlive the test and kill a slow suite.
+        @set_time_limit(0);
+
         // Per-process caches must not leak between tests.
         Setup::reset();
         Settings::flush();

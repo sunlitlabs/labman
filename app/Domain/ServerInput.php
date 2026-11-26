@@ -27,6 +27,9 @@ final class ServerInput
             $in['extra_domains']['public'] = [];
         }
         unset($in['local_domains']);
+        if (array_key_exists('alternates', $in)) {
+            $in['alternates'] = \App\Support\Alternates::parse($in['alternates']);
+        }
         if (array_key_exists('extra_domains', $in)) {
             $in['extra_domains'] = Domains::extras($in['extra_domains']);
         }
@@ -52,7 +55,7 @@ final class ServerInput
     /** @return array<string, array<int, mixed>> */
     public static function rules(Server|int|null $ignore = null): array
     {
-        return [
+        return \App\Support\Alternates::rules() + [
             'name' => ['required', 'string', 'max:100', Rule::unique('servers', 'name')->ignore($ignore)],
             'address' => ['required', 'string', 'max:253', Check::hostOrIp()],
             'domain' => ['nullable', 'string', 'max:253', Check::hostname()],
@@ -79,6 +82,7 @@ final class ServerInput
     public static function payload(array $validated): array
     {
         $validated['ports'] = array_values(array_unique(array_map('intval', $validated['ports'] ?? [])));
+        $validated['alternates'] = \App\Support\Alternates::store($validated['alternates'] ?? null);
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
         $validated['extra_domains'] = Domains::cleanExtras($validated['extra_domains'] ?? null, [$validated['domain'] ?? null]);
         // A server always has a zone: blank keeps the current one (or the default for a new server).
@@ -110,6 +114,7 @@ final class ServerInput
             'address' => $server->address,
             'domain' => $server->domain,
             'extra_domains' => $server->extra_domains,
+            'alternates' => $server->alternates ?? [],
             'group' => $server->group,
             'ports' => $server->ports ?? [],
             'ssh_user' => $server->ssh_user,

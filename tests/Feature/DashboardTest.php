@@ -116,8 +116,8 @@ class DashboardTest extends TestCase
         $this->assertSame(['up', 'down', 'unknown'], [$lone['backend']['state'], $lone['name']['state'], $lone['public']['state']]);
 
         $this->assertSame('up', \App\Monitoring\Dots::service([['label' => 'backend'] + $bad, ['label' => 'tcp :80'] + $ok], 'up')['backend']['state']);
-        $this->assertSame('down', \App\Monitoring\Dots::server([['label' => 'ssh :22'] + $bad], 'down')['state']);
-        $this->assertSame('unknown', \App\Monitoring\Dots::server([], 'off')['state']);
+        $this->assertSame('down', \App\Monitoring\Dots::server([['label' => 'ssh :22'] + $bad], 'down')['backend']['state']);
+        $this->assertSame('unknown', \App\Monitoring\Dots::server([], 'off')['backend']['state']);
 
         $this->actingAs($this->admin());
         $service = Service::create(['name' => 'Wiki', 'address' => '192.0.2.50', 'domain' => 'wiki.example.com', 'scheme' => 'http', 'path' => '/']);

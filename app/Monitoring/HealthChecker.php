@@ -4,6 +4,7 @@ namespace App\Monitoring;
 
 use App\Models\Server;
 use App\Models\Service;
+use App\Support\Alternates;
 use App\Support\ExpectRange;
 use App\Support\Hosts;
 use App\Support\Settings;
@@ -81,6 +82,7 @@ class HealthChecker
     {
         $targets = [];
         $order = [];
+        $alternates = [];
 
         foreach ($servers as $server) {
             foreach ($server->checkPorts() as $port) {
@@ -93,6 +95,13 @@ class HealthChecker
             if (! isset($order[$server->id])) {
                 $order[$server->id] = [];
             }
+
+            // Another address of the same machine: the first port, labelled with the address's own name.
+            $first = $server->checkPorts()[0] ?? null;
+            foreach ($first === null ? [] : Alternates::of($server) as $i => $alt) {
+                $targets["{$server->id}@{$i}"] = [$alt['address'], $first, $alt['label'].' :'.$first];
+                $alternates[$server->id][$i] = "{$server->id}@{$i}";
+            }
         }
 
         $results = TcpProbe::probe($targets, $timeout);
@@ -100,9 +109,26 @@ class HealthChecker
         $outcomes = [];
         foreach ($order as $id => $keys) {
             $checks = array_values(array_filter(array_map(fn ($k) => $results[$k] ?? null, $keys)));
-            $outcomes[$id] = $keys === []
-                ? ['state' => Verdict::OFF, 'checks' => []]
-                : ['state' => Verdict::server($checks), 'checks' => $checks];
+            $alts = [];
+            foreach ($alternates[$id] ?? [] as $i => $key) {
+                if (isset($results[$key])) {
+                    $r = $results[$key];
+                    $alts[] = new CheckResult($r->label, $r->ok, $r->ms, $r->detail, $i);
+                }
+            }
+
+            if ($keys === []) {
+                $outcomes[$id] = ['state' => Verdict::OFF, 'checks' => []];
+
+                continue;
+            }
+
+            $state = Verdict::server($checks);
+            // Only the main address decides the colour, except that a dead main address with a working one is a partial outage.
+            if ($state === Verdict::DOWN && collect($alts)->contains(fn (CheckResult $c) => $c->ok)) {
+                $state = Verdict::DEGRADED;
+            }
+            $outcomes[$id] = ['state' => $state, 'checks' => array_merge($checks, $alts)];
         }
 
         return $outcomes;
@@ -145,6 +171,12 @@ class HealthChecker
             }
             if ($service->check_tcp) {
                 $tcp["{$service->id}:tcp"] = [$address, $service->effectivePort(), 'tcp :'.$service->effectivePort()];
+            }
+            foreach (Alternates::of($service) as $i => $alt) {
+                $tcp["{$service->id}:alt{$i}"] = [$alt['address'], $service->effectivePort(), $alt['label'].' :'.$service->effectivePort()];
+                if ($service->public_check && $alt['domain']) {
+                    $requests["{$service->id}|alt{$i}"] = ['https://'.$alt['domain'].$service->path, (bool) $service->verify_tls, []];
+                }
             }
         }
 
@@ -200,7 +232,23 @@ class HealthChecker
             $backendUp = $web->ok || ($port !== null && $port->ok);
             $nameUp = collect($names)->contains(fn (CheckResult $c) => $c->ok);
             $nameDown = collect($names)->contains(fn (CheckResult $c) => ! $c->ok);
+
+            // Other addresses of the service: shown with their own results, they only matter when nothing else answers.
+            $alts = [];
+            foreach (Alternates::of($service) as $i => $alt) {
+                $tcpAlt = $tcpResults["{$id}:alt{$i}"] ?? null;
+                if ($tcpAlt !== null) {
+                    $alts[] = new CheckResult($tcpAlt->label, $tcpAlt->ok, $tcpAlt->ms, $tcpAlt->detail, $i);
+                }
+                if (isset($requests["{$id}|alt{$i}"])) {
+                    $byName = $this->interpret($alt['label'].' name', $responses["{$id}|alt{$i}"] ?? null, $times["{$id}|alt{$i}"] ?? null, $range);
+                    $alts[] = new CheckResult($byName->label, $byName->ok, $byName->ms, $byName->detail, $i);
+                }
+            }
+            $altUp = collect($alts)->contains(fn (CheckResult $c) => $c->ok);
+
             $state = match (true) {
+                ! $backendUp && ! $nameUp && $altUp => Verdict::DEGRADED,
                 ! $backendUp && ! $nameUp => Verdict::DOWN,
                 $backendUp && $nameDown => Verdict::DEGRADED,
                 default => Verdict::UP,
@@ -211,7 +259,7 @@ class HealthChecker
             if ($port !== null && ! $web->ok) {
                 $checks[] = $port;
             }
-            array_push($checks, ...$names);
+            array_push($checks, ...$names, ...$alts);
 
             $outcomes[$id] = ['state' => $state, 'checks' => $checks];
         }

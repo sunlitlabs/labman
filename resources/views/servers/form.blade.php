@@ -61,6 +61,12 @@
             </section>
 
             <section class="formcard">
+                <h2>More addresses</h2>
+                <p class="sub">For a machine reachable another way, such as a Wi-Fi address next to the LAN one. Each can have its own domain. The main address above is the preferred one; these show on the dashboard with their own status dot and never turn it yellow when they are down.</p>
+                @include('partials.alternates', ['model' => $server])
+            </section>
+
+            <section class="formcard">
                 <h2>Dashboard</h2>
                 <label class="check">
                     <input type="hidden" name="on_dashboard" value="0">

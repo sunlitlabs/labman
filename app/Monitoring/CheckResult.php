@@ -10,11 +10,18 @@ final class CheckResult
         public readonly bool $ok,
         public readonly ?int $ms,
         public readonly string $detail,
+        /** Set for a check of an alternate address: its position in the list. */
+        public readonly ?int $via = null,
     ) {}
 
-    /** @return array{label: string, ok: bool, ms: int|null, detail: string} */
+    /** @return array{label: string, ok: bool, ms: int|null, detail: string, via?: int} */
     public function toArray(): array
     {
-        return ['label' => $this->label, 'ok' => $this->ok, 'ms' => $this->ms, 'detail' => $this->detail];
+        $out = ['label' => $this->label, 'ok' => $this->ok, 'ms' => $this->ms, 'detail' => $this->detail];
+        if ($this->via !== null) {
+            $out['via'] = $this->via;
+        }
+
+        return $out;
     }
 }

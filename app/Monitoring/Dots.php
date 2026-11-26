@@ -19,13 +19,15 @@ final class Dots
     {
         $hasLocal = false;
         foreach ($checks as $c) {
-            $hasLocal = $hasLocal || str_starts_with((string) $c['label'], 'local');
+            $hasLocal = $hasLocal || (! isset($c['via']) && str_starts_with((string) $c['label'], 'local'));
         }
 
         $groups = ['backend' => [], 'name' => [], 'public' => []];
         foreach ($checks as $c) {
             $label = (string) $c['label'];
-            if ($label === 'backend' || str_starts_with($label, 'tcp')) {
+            if (isset($c['via'])) {
+                $groups['alt:'.$c['via']][] = $c;
+            } elseif ($label === 'backend' || str_starts_with($label, 'tcp')) {
                 $groups['backend'][] = $c;
             } elseif (str_starts_with($label, 'local') || ($label === 'public' && ! $hasLocal)) {
                 $groups['name'][] = $c;
@@ -43,10 +45,19 @@ final class Dots
         return $out;
     }
 
-    /** @param list<array<string, mixed>> $checks */
+    /**
+     * The main address's dot under 'backend', and one 'alt:<position>' dot per alternate address.
+     *
+     * @param  list<array<string, mixed>>  $checks
+     */
     public static function server(array $checks, string $state): array
     {
-        return self::dot($checks, $state, 'all');
+        $groups = ['backend' => []];
+        foreach ($checks as $c) {
+            $groups[isset($c['via']) ? 'alt:'.$c['via'] : 'backend'][] = $c;
+        }
+
+        return array_map(fn ($list) => self::dot($list, $state, 'all'), $groups);
     }
 
     /** @param list<array<string, mixed>> $list */

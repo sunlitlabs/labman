@@ -46,7 +46,7 @@ class LinkTest extends TestCase
         Link::create(['name' => 'Cloud dashboard', 'url' => 'https://cloud.example.org/home', 'group' => 'Cloud']);
 
         $this->actingAs($this->user())->get('/')->assertOk()
-            ->assertSee('Links · Cloud')->assertSee('Cloud dashboard')
+            ->assertSee('Cloud')->assertSee('Cloud dashboard')
             ->assertSee('data-href="https://cloud.example.org/home"', false);
     }
 

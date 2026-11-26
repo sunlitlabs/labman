@@ -36,6 +36,10 @@
                         <label for="group">Group <span class="hint">optional heading</span></label>
                         <input id="group" name="group" type="text" maxlength="60" value="{{ old('group', $service->group) }}">
                     </div>
+                    <div class="field">
+                        <label for="family">Same as <span class="hint">optional: services with the same name here share one tile on the dashboard, like one Nginx Proxy Manager per zone</span></label>
+                        <input id="family" name="family" type="text" maxlength="60" value="{{ old('family', $service->family) }}" placeholder="Nginx Proxy Manager">
+                    </div>
                 </div>
                 @php($names = \App\Support\Domains::namesOf($service))
                 @php($localDefault = \App\Support\Domains::defaultFor('local'))
@@ -103,6 +107,12 @@
             </section>
 
             <p class="hint service-preview" data-service-preview aria-live="polite"></p>
+
+            <section class="formcard">
+                <h2>More addresses</h2>
+                <p class="sub">For a service reachable another way, such as a Wi-Fi address next to the LAN one. Each can have its own domain. The main address above is the preferred one; these show on the dashboard with their own status dot and never turn it yellow when they are down.</p>
+                @include('partials.alternates', ['model' => $service])
+            </section>
 
             <section class="formcard">
                 <h2>Dashboard</h2>

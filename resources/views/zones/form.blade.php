@@ -43,6 +43,14 @@
             </section>
 
             <section class="formcard">
+                <h2>Dashboard</h2>
+                <label class="check">
+                    <input type="checkbox" name="dashboard_indicator" value="1" @checked(old('dashboard_indicator', $zone->dashboard_indicator))>
+                    <span>Show zone badges to people on this network <span class="hint">when someone opens the dashboard from an address in this zone (see the network blocks below), every item shows which zone it is in and they can switch to a view grouped by zone. Leave it off for zones whose people do not need to know.</span></span>
+                </label>
+            </section>
+
+            <section class="formcard">
                 <h2>Which servers belong here</h2>
                 <p class="sub">Servers are placed on the server form. Network blocks only suggest a zone for a new server from its address.</p>
                 <div class="field">

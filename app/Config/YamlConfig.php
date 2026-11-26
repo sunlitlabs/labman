@@ -217,6 +217,7 @@ final class YamlConfig
             'ports' => $s->ports ?: null,
             'ssh_user' => $s->ssh_user,
             'ssh_port' => (int) $s->ssh_port !== 22 ? (int) $s->ssh_port : null,
+            'alternates' => $s->alternates ?: null,
             'notes' => $s->notes,
             'monitor' => $s->monitor ? null : false,
             'on_dashboard' => $s->on_dashboard ? null : false,
@@ -246,6 +247,8 @@ final class YamlConfig
             'check_tcp' => $s->check_tcp ? null : false,
             'icon' => $s->icon,
             'certificate' => $s->cert_mode,
+            'alternates' => $s->alternates ?: null,
+            'family' => $s->family,
         ], fn ($v) => $v !== null && $v !== ''))->all();
 
         $document = ['settings' => $settings];
@@ -262,6 +265,7 @@ final class YamlConfig
                 // The default zone's domains are already settings.local_domains / public_domains.
                 'domains' => $z->is_default ? null : (array_filter($z->domains()) ?: null),
                 'proxy_address' => $z->proxy_address,
+                'dashboard_indicator' => $z->dashboard_indicator ?: null,
                 'certificates' => $z->certificate_policy ?: null,
                 'dns' => $z->dns ?: null,
                 'mirrors' => \App\Npm\Mirrors::refs($z->mirror_sources) ? array_map(fn ($r) => ['zone' => Zone::query()->find($r['zone_id'])?->name, 'upstream' => $r['upstream']], \App\Npm\Mirrors::refs($z->mirror_sources)) : null,
@@ -538,6 +542,10 @@ final class YamlConfig
                 }
             }
 
+            if (array_key_exists('dashboard_indicator', $item) && $item['dashboard_indicator'] !== null) {
+                $row['dashboard_indicator'] = filter_var($item['dashboard_indicator'], FILTER_VALIDATE_BOOLEAN);
+            }
+
             $notes = self::text($item['notes'] ?? null);
             if ($notes !== null && mb_strlen($notes) > 500) {
                 $errors[] = "{$who}: 'notes' is too long (max 500)";
@@ -647,6 +655,7 @@ final class YamlConfig
             }
 
             $extraDomains = self::extraDomains($who, $item, $errors);
+            $alternates = self::alternates($who, $item, $errors);
             $flags = self::flags($who, $item, ['monitor' => true, 'check_ssh' => true, 'on_dashboard' => true], $errors);
             $icon = self::icon($who, $item, $errors);
 
@@ -668,6 +677,7 @@ final class YamlConfig
                     'on_dashboard' => $flags['on_dashboard'],
                     'check_ssh' => $flags['check_ssh'],
                     'extra_domains' => $extraDomains,
+                    'alternates' => $alternates,
                     'icon' => $icon,
                 ] + self::zoneRef($who, $item, $errors);
             }
@@ -854,6 +864,11 @@ final class YamlConfig
                 }
             }
 
+            $alternates = self::alternates($who, $item, $errors);
+            $family = self::text($item['family'] ?? null);
+            if ($family !== null && mb_strlen($family) > 60) {
+                $errors[] = "{$who}: 'family' is longer than 60 characters";
+            }
             $flags = self::flags($who, $item, ['verify_tls' => true, 'public_check' => true, 'websockets' => false, 'monitor' => true, 'check_tcp' => true, 'on_dashboard' => true], $errors);
             $icon = self::icon($who, $item, $errors);
 
@@ -892,6 +907,8 @@ final class YamlConfig
                     'monitor' => $flags['monitor'],
                     'on_dashboard' => $flags['on_dashboard'],
                     'check_tcp' => $flags['check_tcp'],
+                    'alternates' => $alternates,
+                    'family' => $family ?: null,
                     'icon' => $icon,
                 ] + self::zoneRef($who, $item, $errors) + self::certRef($who, $item, $errors)
                     + (array_key_exists('publish_in', $item) && $item['publish_in'] !== null ? ['publish_in' => self::zoneRefs($who.': publish_in', $item['publish_in'], $errors)] : []);
@@ -926,6 +943,29 @@ final class YamlConfig
     }
 
     /** @param list<string> $errors */
+    /** `alternates:` is a list of {label, address, domain}; returns the stored shape (or null). */
+    private static function alternates(string $who, array $item, array &$errors): ?array
+    {
+        if (! array_key_exists('alternates', $item) || $item['alternates'] === null) {
+            return null;
+        }
+        if (! is_array($item['alternates']) || ! array_is_list($item['alternates'])) {
+            $errors[] = "{$who}: 'alternates' must be a list of entries with an address (and optionally a label and a domain)";
+
+            return null;
+        }
+
+        $rows = \App\Support\Alternates::parse($item['alternates']);
+        $validator = \Illuminate\Support\Facades\Validator::make(['alternates' => $rows], \App\Support\Alternates::rules());
+        if ($validator->fails()) {
+            $errors[] = "{$who}: 'alternates' is not valid: ".$validator->errors()->first();
+
+            return null;
+        }
+
+        return \App\Support\Alternates::store($rows);
+    }
+
     private static function icon(string $who, array $item, array &$errors): ?string
     {
         $icon = self::text($item['icon'] ?? null);

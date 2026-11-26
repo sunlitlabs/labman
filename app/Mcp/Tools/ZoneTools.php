@@ -91,6 +91,7 @@ final class ZoneTools
             'dns' => ['type' => 'object', 'description' => 'DNS plan settings: {split_horizon: bool, public_address: string}.', 'additionalProperties' => true],
             'mirrors' => ['type' => 'array', 'description' => 'The zones whose hosts this zone mirrors (off when empty): [{zone: name or id, upstream: auto | http | https | https_insecure}].', 'items' => ['type' => 'object', 'additionalProperties' => true]],
             'is_default' => Tool::bool('Make this the default zone (where servers go when no zone is chosen).'),
+            'dashboard_indicator' => Tool::bool('Show zone badges and a by-zone view on the dashboard for people opening it from an address in this zone (its network blocks). Default false.'),
         ];
         $selection = ['type' => 'array', 'description' => 'The preview items to apply, copied exactly from the preview: {zone, key, fingerprint}. Anything that changed since the preview is refused.', 'items' => ['type' => 'object', 'properties' => ['zone' => ['type' => 'string'], 'key' => ['type' => 'string'], 'fingerprint' => ['type' => 'string']], 'required' => ['zone', 'key', 'fingerprint'], 'additionalProperties' => false]];
 
@@ -356,7 +357,7 @@ final class ZoneTools
         $policy = $z->certificatePolicy();
 
         return [
-            'id' => $z->id, 'name' => $z->name, 'level' => $z->level, 'default' => (bool) $z->is_default, 'color' => $z->color, 'icon' => $z->icon,
+            'id' => $z->id, 'name' => $z->name, 'level' => $z->level, 'default' => (bool) $z->is_default, 'color' => $z->color, 'icon' => $z->icon, 'dashboard_indicator' => (bool) $z->dashboard_indicator,
             'cidrs' => $z->cidrs ?? [], 'domains' => $z->domains(), 'proxy_address' => $z->proxy_address, 'notes' => $z->notes,
             'dns' => $z->dnsSettings(), 'certificates' => $policy->toArray() + ['strategy' => $policy->strategy],
             'mirrors' => array_map(fn ($r) => ['zone' => Zone::find($r['zone_id'])?->name, 'upstream' => $r['upstream']], Mirrors::refs($z->mirror_sources)),

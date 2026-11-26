@@ -231,6 +231,7 @@ class ZoneController extends Controller
             'cidrs' => $cidrs ?: null,
             'proxy_address' => filled($v['proxy_address'] ?? null) ? trim($v['proxy_address']) : null,
             'notes' => $v['notes'] ?? null,
+            'dashboard_indicator' => $request->boolean('dashboard_indicator'),
             'certificate_policy' => $policy ?: null,
             'mirror_sources' => Mirrors::refs($sources) ?: null,
             'dns' => array_filter(['split_horizon' => $request->boolean('dns_split_horizon') ?: null, 'public_address' => filled($v['dns_public_address'] ?? null) ? trim($v['dns_public_address']) : null], fn ($x) => $x !== null) ?: null,

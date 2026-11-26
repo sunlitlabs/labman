@@ -194,19 +194,18 @@
     var visibleTotal = 0;
     var perSection = {};
 
+    // Each tile says which kind it is (data-section); a card (.group) holds tiles of any kind and hides when none shows.
     document.querySelectorAll('.group').forEach(function (group) {
-      var section = group.getAttribute('data-section');
-      var inTab = !section || currentTab === 'all' || section === currentTab;
       var visible = 0;
-      var matching = 0;
       group.querySelectorAll('[data-filter]').forEach(function (row) {
+        var section = row.getAttribute('data-section');
+        var inTab = !section || currentTab === 'all' || section === currentTab;
         var hay = row.getAttribute('data-filter');
         var match = tokens.every(function (t) { return hay.indexOf(t) !== -1; });
-        if (match) matching++;
+        if (match && section) perSection[section] = (perSection[section] || 0) + 1;
         row.hidden = !(match && inTab);
         if (match && inTab) visible++;
       });
-      if (section) perSection[section] = (perSection[section] || 0) + matching;
       group.hidden = visible === 0;
       visibleTotal += visible;
     });
@@ -470,11 +469,12 @@
   // Mirrors App\Monitoring\Dots: which of a tile's names and address is the one with a problem.
   function dotsOf(kind, item) {
     var checks = item.checks || [];
-    var hasLocal = checks.some(function (c) { return c.label.indexOf('local') === 0; });
+    var hasLocal = checks.some(function (c) { return c.via === undefined && c.label.indexOf('local') === 0; });
     var groups = { backend: [], name: [], public: [] };
     checks.forEach(function (c) {
       var l = c.label;
-      if (kind === 'servers' || l === 'backend' || l.indexOf('tcp') === 0) groups.backend.push(c);
+      if (c.via !== undefined && c.via !== null) (groups['alt:' + c.via] = groups['alt:' + c.via] || []).push(c);
+      else if (kind === 'servers' || l === 'backend' || l.indexOf('tcp') === 0) groups.backend.push(c);
       else if (l.indexOf('local') === 0 || (l === 'public' && !hasLocal)) groups.name.push(c);
       else if (l.indexOf('public') === 0) groups.public.push(c);
     });
@@ -499,6 +499,7 @@
     var row = document.querySelector('[data-kind="' + kind + '"][data-id="' + item.id + '"]');
     if (!row) return;
     row.setAttribute('data-state', item.state);
+    var family = row.closest('[data-family]');
     var dots = row.querySelectorAll('[data-dot]');
     if (dots.length) {
       var d = dotsOf(kind, item);
@@ -514,6 +515,12 @@
       pill.className = 'pill pill-' + item.state + (stale ? ' is-stale' : '');
       pill.textContent = stale ? label + ' (stale)' : label;
       pill.title = item.checked_at ? 'Checked ' + new Date(item.checked_at).toLocaleString() : 'Not checked yet';
+    }
+    if (family) {
+      // A family tile shows its worst member.
+      var states = Array.prototype.map.call(family.querySelectorAll('[data-kind][data-id]'), function (m) { return m.getAttribute('data-state'); });
+      var worst = ['down', 'degraded', 'unknown', 'up'].filter(function (s) { return states.indexOf(s) !== -1; })[0] || 'off';
+      family.setAttribute('data-state', worst);
     }
     var detail = row.querySelector('[data-detail]');
     if (detail && row.classList.contains('tile')) {

@@ -29,6 +29,9 @@ final class ServiceInput
             $in = array_merge($in, Domains::fromLists((array) ($in['local_domains'] ?? []), (array) ($in['public_domains'] ?? [])));
         }
         unset($in['local_domains'], $in['public_domains']);
+        if (array_key_exists('alternates', $in)) {
+            $in['alternates'] = \App\Support\Alternates::parse($in['alternates']);
+        }
         if (array_key_exists('extra_domains', $in)) {
             $in['extra_domains'] = Domains::extras($in['extra_domains']);
         }
@@ -88,7 +91,8 @@ final class ServiceInput
     /** @return array<string, array<int, mixed>> */
     public static function rules(Service|int|null $ignore = null): array
     {
-        return [
+        return \App\Support\Alternates::rules() + [
+            'family' => ['nullable', 'string', 'max:60'],
             'name' => ['required', 'string', 'max:100', Rule::unique('services', 'name')->ignore($ignore)],
             'domain' => ['nullable', 'string', 'max:253', Check::hostname()],
             'public_domain' => ['nullable', 'string', 'max:253', Check::hostname(), 'different:domain'],
@@ -144,6 +148,8 @@ final class ServiceInput
         $validated['address'] = $validated['server_id'] ? null : ($validated['address'] ?? null);
         $validated['health_path'] = filled($validated['health_path'] ?? null) ? $validated['health_path'] : null;
         $validated['icon'] = filled($validated['icon'] ?? null) ? strtolower($validated['icon']) : null;
+        $validated['alternates'] = \App\Support\Alternates::store($validated['alternates'] ?? null);
+        $validated['family'] = filled($validated['family'] ?? null) ? trim($validated['family']) : null;
         $validated['public_domain'] = filled($validated['public_domain'] ?? null) ? strtolower($validated['public_domain']) : null;
         if (array_key_exists('publish_zones', $validated)) {
             $validated['publish_zones'] = \App\Npm\Mirrors::refs($validated['publish_zones']) ?: null;
@@ -192,6 +198,8 @@ final class ServiceInput
             'domain' => $service->domain,
             'public_domain' => $service->public_domain,
             'extra_domains' => $service->extra_domains,
+            'alternates' => $service->alternates ?? [],
+            'family' => $service->family,
             'server_id' => $service->server_id,
             'address' => $service->address,
             'port' => $service->port,

@@ -19,6 +19,12 @@
         if ($canServices && $kinds['services'] > 0) { $tabs['services'] = ['Services', $kinds['services']]; }
         if ($canServers && $kinds['servers'] > 0) { $tabs['servers'] = ['Servers', $kinds['servers']]; }
         if ($kinds['links'] > 0) { $tabs['links'] = ['Links', $kinds['links']]; }
+
+        $unknownDot = ['state' => 'unknown', 'title' => 'Not checked'];
+        $worst = function (array $states) {
+            foreach (['down', 'degraded', 'unknown', 'up'] as $s) { if (in_array($s, $states, true)) { return $s; } }
+            return 'off';
+        };
     @endphp
 
     <section class="hero hero-{{ $tone }}" id="hero" aria-live="polite">
@@ -49,6 +55,12 @@
                 @endforeach
             </div>
         @endif
+        @if ($indicator)
+            <div class="tabs viewswitch" aria-label="Arrange by">
+                <a class="tab" href="{{ request()->fullUrlWithQuery(['view' => null]) }}" @if ($view === 'groups') aria-current="true" @endif>Groups</a>
+                <a class="tab" href="{{ request()->fullUrlWithQuery(['view' => 'zones']) }}" @if ($view === 'zones') aria-current="true" @endif>Zones</a>
+            </div>
+        @endif
         <span id="conn" class="conn" hidden>Live updates paused: cannot reach the server.</span>
         @can('admin')
             <span class="dashbar-add">
@@ -73,83 +85,108 @@
         </div>
     @endif
 
-    @if ($canServices)
-        @foreach ($serviceGroups as $group => $items)
-            <section class="group" data-section="services">
-                <h2>{{ $group !== '' ? $group : 'Services' }}<span class="count">{{ count($items) }}</span></h2>
+    <div class="board">
+        @foreach ($cards as $card)
+            <section class="group gcard">
+                <h2>{{ $card['title'] }}<span class="count">{{ count($card['entries']) }}</span></h2>
                 <div class="tiles">
-                    @foreach ($items as $service)
-                        @php($open = $service->openUrl())
-                        @php($st = \App\Monitoring\StatusView::of($service))
-                        @php($bad = collect($st['checks'])->firstWhere('ok', false))
-                        @php($dots = \App\Monitoring\Dots::service($st['checks'], $st['state']))
-                        <article class="tile {{ $open ? 'clickable' : '' }}" data-kind="services" data-id="{{ $service->id }}" data-state="{{ $st['state'] }}"
-                                 @if ($open) data-href="{{ $open }}" tabindex="0" role="link" aria-label="Open {{ $service->name }}" @endif
-                                 data-filter="{{ strtolower(implode(' ', [$service->name, $service->domain, $service->public_domain, $service->backendAddress(), $service->group, $service->notes, 'service'])) }}">
-                            @include('partials.icon', ['model' => $service])
-                            <div class="tile-body">
-                                <span class="tile-name">{{ $service->name }}</span>
-                                <small class="tile-sub">@if ($service->domain || $service->public_domain)<span class="dot" data-dot="name" data-dot-state="{{ $dots['name']['state'] }}" title="{{ $dots['name']['title'] }}"></span>@else<span class="dot" data-dot="backend" data-dot-state="{{ $dots['backend']['state'] }}" title="{{ $dots['backend']['title'] }}"></span>@endif{{ $service->domain ?: $service->public_domain ?: ($service->backendAddress() ? \App\Support\Hosts::forUrl($service->backendAddress()).':'.$service->effectivePort() : 'no address') }}</small>
-                                <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
-                                @if ($service->backendUrl() && ($service->domain || $service->public_domain))
-                                    <a class="tile-ip mono" href="{{ $service->backendUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the backend directly, bypassing the domain name"><span class="dot" data-dot="backend" data-dot-state="{{ $dots['backend']['state'] }}" title="{{ $dots['backend']['title'] }}"></span>{{ \App\Support\Hosts::forUrl($service->backendAddress()) }}:{{ $service->effectivePort() }}</a>
-                                @endif
-                                @if ($service->domain && $service->public_domain)
-                                    <a class="tile-public" href="{{ $service->publicDomainUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the public address"><span class="dot" data-dot="public" data-dot-state="{{ $dots['public']['state'] }}" title="{{ $dots['public']['title'] }}"></span>{{ $service->public_domain }}</a>
-                                @endif
-                            </div>
-                            <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>
-                        </article>
+                    @foreach ($card['entries'] as $entry)
+                        @if ($entry['kind'] === 'services')
+                            @php
+                                $service = $entry['model'];
+                                $open = $service->openUrl();
+                                $st = \App\Monitoring\StatusView::of($service);
+                                $bad = collect($st['checks'])->firstWhere('ok', false);
+                                $dots = \App\Monitoring\Dots::service($st['checks'], $st['state']);
+                                $alts = \App\Support\Alternates::of($service);
+                                $zoneName = $indicator && $view !== 'zones' ? ($zones[$zoneOf['services'][$service->id] ?? 0]->name ?? null) : null;
+                            @endphp
+                            <article class="tile {{ $open ? 'clickable' : '' }}" data-kind="services" data-section="services" data-id="{{ $service->id }}" data-state="{{ $st['state'] }}"
+                                     @if ($open) data-href="{{ $open }}" tabindex="0" role="link" aria-label="Open {{ $service->name }}" @endif
+                                     data-filter="{{ strtolower(implode(' ', array_filter([$service->name, $service->domain, $service->public_domain, $service->backendAddress(), $service->group, $service->notes, $service->family, $zoneName, implode(' ', array_map(fn ($a) => $a['label'].' '.$a['address'].' '.$a['domain'], $alts)), 'service']))) }}">
+                                @include('partials.icon', ['model' => $service])
+                                <div class="tile-body">
+                                    <span class="tile-name">{{ $service->name }}@if ($zoneName)<span class="zone-chip zone-c{{ ($zoneOf['services'][$service->id] ?? 0) % 8 }}">{{ $zoneName }}</span>@endif</span>
+                                    <small class="tile-sub">@if ($service->domain || $service->public_domain)<span class="dot" data-dot="name" data-dot-state="{{ $dots['name']['state'] }}" title="{{ $dots['name']['title'] }}"></span>@else<span class="dot" data-dot="backend" data-dot-state="{{ $dots['backend']['state'] }}" title="{{ $dots['backend']['title'] }}"></span>@endif{{ $service->domain ?: $service->public_domain ?: ($service->backendAddress() ? \App\Support\Hosts::forUrl($service->backendAddress()).':'.$service->effectivePort() : 'no address') }}</small>
+                                    <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
+                                    @if ($service->backendUrl() && ($service->domain || $service->public_domain))
+                                        <a class="tile-ip mono" href="{{ $service->backendUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the backend directly, bypassing the domain name"><span class="dot" data-dot="backend" data-dot-state="{{ $dots['backend']['state'] }}" title="{{ $dots['backend']['title'] }}"></span>{{ \App\Support\Hosts::forUrl($service->backendAddress()) }}:{{ $service->effectivePort() }}</a>
+                                    @endif
+                                    @if ($service->domain && $service->public_domain)
+                                        <a class="tile-public" href="{{ $service->publicDomainUrl() }}" target="_blank" rel="noopener noreferrer" title="Open the public address"><span class="dot" data-dot="public" data-dot-state="{{ $dots['public']['state'] }}" title="{{ $dots['public']['title'] }}"></span>{{ $service->public_domain }}</a>
+                                    @endif
+                                    @foreach ($alts as $i => $alt)
+                                        @php $ad = $dots['alt:'.$i] ?? $unknownDot; @endphp
+                                        <a class="tile-alt" href="{{ $alt['domain'] ? 'https://'.$alt['domain'].$service->path : $service->scheme.'://'.\App\Support\Hosts::forUrl($alt['address']).':'.$service->effectivePort().$service->path }}" target="_blank" rel="noopener noreferrer" title="{{ $alt['address'] }}"><span class="dot" data-dot="alt:{{ $i }}" data-dot-state="{{ $ad['state'] }}" title="{{ $ad['title'] }}"></span><span class="alt-label">{{ $alt['label'] }}</span> {{ $alt['domain'] ?: $alt['address'] }}</a>
+                                    @endforeach
+                                </div>
+                                <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>
+                            </article>
+                        @elseif ($entry['kind'] === 'family')
+                            @php
+                                $members = $entry['members'];
+                                $memberStates = array_map(fn ($m) => \App\Monitoring\StatusView::of($m)['state'], $members);
+                                $familyState = $worst($memberStates);
+                            @endphp
+                            <article class="tile family" data-family data-section="services" data-state="{{ $familyState }}"
+                                     data-filter="{{ strtolower(implode(' ', array_merge([$entry['name'], 'service'], array_map(fn ($m) => implode(' ', array_filter([$m->name, $m->domain, $m->backendAddress()])), $members)))) }}">
+                                @include('partials.icon', ['model' => $members[0]])
+                                <div class="tile-body">
+                                    <span class="tile-name">{{ $entry['name'] }}<span class="fam-count">{{ count($members) }}</span></span>
+                                    <div class="fam-members">
+                                        @foreach ($members as $m)
+                                            @php
+                                                $ms = \App\Monitoring\StatusView::of($m);
+                                                $short = trim(preg_replace('/^'.preg_quote($entry['name'], '/').'[\s:\-–—·]*/iu', '', $m->name));
+                                            @endphp
+                                            <a class="fam-member" href="{{ $m->openUrl() ?: '#' }}" target="_blank" rel="noopener noreferrer" data-kind="services" data-id="{{ $m->id }}" data-state="{{ $ms['state'] }}" title="{{ $m->name }}">
+                                                <span data-pill class="pill pill-{{ $ms['state'] }}{{ $ms['stale'] && $ms['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $ms['checked_at'] ? 'Checked '.$ms['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($ms['state']) }}</span>{{ $short !== '' ? $short : $m->name }}
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </article>
+                        @elseif ($entry['kind'] === 'servers')
+                            @php
+                                $server = $entry['model'];
+                                $ssh = $server->sshCommand();
+                                $st = \App\Monitoring\StatusView::of($server);
+                                $bad = collect($st['checks'])->firstWhere('ok', false);
+                                $dot = \App\Monitoring\Dots::server($st['checks'], $st['state']);
+                                $alts = \App\Support\Alternates::of($server);
+                                $zoneName = $indicator && $view !== 'zones' ? ($zones[$zoneOf['servers'][$server->id] ?? 0]->name ?? null) : null;
+                            @endphp
+                            <article class="tile clickable" tabindex="0" role="button" data-kind="servers" data-section="servers" data-id="{{ $server->id }}" data-state="{{ $st['state'] }}"
+                                     data-ssh="{{ $ssh }}" aria-label="Copy SSH command for {{ $server->name }}: {{ $ssh }}"
+                                     data-filter="{{ strtolower(implode(' ', array_filter([$server->name, $server->domain, $server->address, $server->group, $server->notes, $zoneName, implode(' ', array_map(fn ($a) => $a['label'].' '.$a['address'].' '.$a['domain'], $alts)), 'server']))) }}">
+                                @include('partials.icon', ['model' => $server])
+                                <div class="tile-body">
+                                    <span class="tile-name">{{ $server->name }}@if ($zoneName)<span class="zone-chip zone-c{{ ($zoneOf['servers'][$server->id] ?? 0) % 8 }}">{{ $zoneName }}</span>@endif</span>
+                                    <a class="tile-sub mono" href="{{ $server->addressUrl() }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->address }}"><span class="dot" data-dot="backend" data-dot-state="{{ $dot['backend']['state'] ?? 'unknown' }}" title="{{ $dot['backend']['title'] ?? 'Not checked' }}"></span>{{ $server->address }}</a>
+                                    <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
+                                    @foreach ($alts as $i => $alt)
+                                        @php $ad = $dot['alt:'.$i] ?? $unknownDot; @endphp
+                                        <a class="tile-alt" href="{{ $alt['domain'] ? 'http://'.$alt['domain'] : 'http://'.\App\Support\Hosts::forUrl($alt['address']) }}" target="_blank" rel="noopener noreferrer" title="{{ $alt['address'] }}"><span class="dot" data-dot="alt:{{ $i }}" data-dot-state="{{ $ad['state'] }}" title="{{ $ad['title'] }}"></span><span class="alt-label">{{ $alt['label'] }}</span> {{ $alt['domain'] ?: $alt['address'] }}</a>
+                                    @endforeach
+                                </div>
+                                <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>
+                            </article>
+                        @else
+                            @php $link = $entry['model']; @endphp
+                            <article class="tile clickable" data-section="links" data-href="{{ $link->url }}" tabindex="0" role="link" aria-label="Open {{ $link->name }}"
+                                     data-filter="{{ strtolower(implode(' ', array_filter([$link->name, $link->url, $link->group, $link->notes, 'link']))) }}">
+                                @include('partials.icon', ['model' => $link])
+                                <div class="tile-body">
+                                    <span class="tile-name">{{ $link->name }}</span>
+                                    <small class="tile-sub">{{ $link->notes ?: $link->hostLabel() }}</small>
+                                </div>
+                            </article>
+                        @endif
                     @endforeach
                 </div>
             </section>
         @endforeach
-    @endif
-
-    @if ($canServers)
-        @foreach ($serverGroups as $group => $items)
-            <section class="group" data-section="servers">
-                <h2>{{ $group !== '' ? 'Servers · '.$group : 'Servers' }}<span class="count">{{ count($items) }}</span></h2>
-                <div class="tiles">
-                    @foreach ($items as $server)
-                        @php($ssh = $server->sshCommand())
-                        @php($st = \App\Monitoring\StatusView::of($server))
-                        @php($bad = collect($st['checks'])->firstWhere('ok', false))
-                        @php($dot = \App\Monitoring\Dots::server($st['checks'], $st['state']))
-                        <article class="tile clickable" tabindex="0" role="button" data-kind="servers" data-id="{{ $server->id }}" data-state="{{ $st['state'] }}"
-                                 data-ssh="{{ $ssh }}" aria-label="Copy SSH command for {{ $server->name }}: {{ $ssh }}"
-                                 data-filter="{{ strtolower(implode(' ', [$server->name, $server->domain, $server->address, $server->group, $server->notes, 'server'])) }}">
-                            @include('partials.icon', ['model' => $server])
-                            <div class="tile-body">
-                                <span class="tile-name">{{ $server->name }}</span>
-                                <a class="tile-sub mono" href="{{ $server->addressUrl() }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->address }}"><span class="dot" data-dot="backend" data-dot-state="{{ $dot['state'] }}" title="{{ $dot['title'] }}"></span>{{ $server->address }}</a>
-                                <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
-                            </div>
-                            <span data-pill class="pill pill-{{ $st['state'] }}{{ $st['stale'] && $st['state'] !== 'off' ? ' is-stale' : '' }}" title="{{ $st['checked_at'] ? 'Checked '.$st['checked_at'] : 'Not checked yet' }}">{{ \App\Monitoring\StatusView::label($st['state']) }}</span>
-                        </article>
-                    @endforeach
-                </div>
-            </section>
-        @endforeach
-    @endif
-
-    @foreach ($linkGroups as $group => $items)
-        <section class="group" data-section="links">
-            <h2>{{ $group !== '' ? 'Links · '.$group : 'Links' }}<span class="count">{{ count($items) }}</span></h2>
-            <div class="tiles">
-                @foreach ($items as $link)
-                    <article class="tile clickable" data-href="{{ $link->url }}" tabindex="0" role="link" aria-label="Open {{ $link->name }}"
-                             data-filter="{{ strtolower(implode(' ', [$link->name, $link->url, $link->group, $link->notes, 'link'])) }}">
-                        @include('partials.icon', ['model' => $link])
-                        <div class="tile-body">
-                            <span class="tile-name">{{ $link->name }}</span>
-                            <small class="tile-sub">{{ $link->notes ?: $link->hostLabel() }}</small>
-                        </div>
-                    </article>
-                @endforeach
-            </div>
-        </section>
-    @endforeach
+    </div>
 
     <p id="no-match" class="card empty" hidden>Nothing matches your search.</p>
 @endsection
