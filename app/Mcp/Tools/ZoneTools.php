@@ -144,7 +144,7 @@ final class ZoneTools
 
             new Tool('set_service_zone', 'Set a service\'s zone options', 'A service normally follows its server\'s zone. Here: the zone it names itself (empty to follow the server again), its own certificate choice (auto, none, letsencrypt_http, letsencrypt_dns or existing:<NPM certificate id>), and the zones it should also be published in (mirrors).',
                 ['service' => Tool::str('Service name or id.'), 'zone' => Tool::str('Zone name or id; empty string to follow the server.'), 'certificate' => Tool::str('auto, none, letsencrypt_http, letsencrypt_dns or existing:<id>.'),
-                    'publish_in' => ['type' => 'array', 'description' => 'Zones to also publish in: [{zone, upstream: auto | http | https | https_insecure}]. An empty list clears it.', 'items' => ['type' => 'object', 'additionalProperties' => true]]],
+                    'publish_in' => ['type' => 'array', 'description' => 'Zones to also publish in: [{zone, upstream: auto | http | https | https_insecure | direct, names?: [host names]}]. By default a mirror covers only the service\'s names under the mirroring zone\'s own domains; names picks which of the service\'s names it covers instead. direct forwards straight to the service (the backend then sees the mirroring proxy\'s address, so trusted-proxy lists need it). An empty list clears it.', 'items' => ['type' => 'object', 'additionalProperties' => true]]],
                 ['service'], 'admin', false, false,
                 function (array $a) {
                     $service = ctype_digit((string) $a['service']) ? Service::find((int) $a['service']) : Service::query()->where('name', $a['service'])->first();
@@ -169,7 +169,17 @@ final class ZoneTools
                             if (! in_array($up, Mirrors::UPSTREAMS, true)) {
                                 throw new ToolException('upstream must be one of: '.implode(', ', Mirrors::UPSTREAMS).'.');
                             }
-                            $refs[] = ['zone_id' => $z->id, 'upstream' => $up];
+                            $names = [];
+                            foreach (is_array($ref) ? (array) ($ref['names'] ?? []) : [] as $n) {
+                                if (! is_string($n) || ! \App\Support\Hosts::isHostname(trim($n))) {
+                                    throw new ToolException('names must be host names.');
+                                }
+                                if (! in_array(mb_strtolower(trim($n)), Mirrors::namesOf($service), true)) {
+                                    throw new ToolException("'{$n}' is not a name of {$service->name}. Its names: ".(implode(', ', Mirrors::namesOf($service)) ?: 'none (give it a domain first)').'.');
+                                }
+                                $names[] = $n;
+                            }
+                            $refs[] = ['zone_id' => $z->id, 'upstream' => $up, 'names' => $names];
                         }
                         $changes['publish_zones'] = Mirrors::refs($refs) ?: null;
                     }
@@ -177,7 +187,7 @@ final class ZoneTools
                     $service = $service->fresh();
 
                     return ['service' => $service->name, 'zone' => Zones::of($service)?->name, 'zone_set_on_service' => $service->zone_id !== null, 'certificate' => $service->cert_mode ?? 'auto',
-                        'publish_in' => array_map(fn ($r) => ['zone' => Zone::find($r['zone_id'])?->name, 'upstream' => $r['upstream']], Mirrors::refs($service->publish_zones)),
+                        'publish_in' => array_map(fn ($r) => ['zone' => Zone::find($r['zone_id'])?->name, 'upstream' => $r['upstream'], 'names' => $r['names'] ?? Mirrors::defaultNames($service, Zone::find($r['zone_id'])), 'names_chosen' => isset($r['names'])], Mirrors::refs($service->publish_zones)),
                         'next' => 'Nothing changes in a proxy until npm_push_preview and npm_push_apply.'];
                 }),
 

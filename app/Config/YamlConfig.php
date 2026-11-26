@@ -109,7 +109,7 @@ final class YamlConfig
                 $row['mirrors'] = $mirrors;
             }
             $zoneIds = Zone::query()->pluck('id', 'name')->mapWithKeys(fn ($id, $name) => [mb_strtolower($name) => $id])->all();
-            $toRefs = fn (array $refs) => array_map(fn ($r) => ['zone_id' => $zoneIds[mb_strtolower($r['zone'])], 'upstream' => $r['upstream']], $refs);
+            $toRefs = fn (array $refs) => array_map(fn ($r) => ['zone_id' => $zoneIds[mb_strtolower($r['zone'])], 'upstream' => $r['upstream']] + (! empty($r['names']) ? ['names' => $r['names']] : []), $refs);
             foreach ($config['zones'] ?? [] as $row) {
                 if (isset($row['mirrors'])) {
                     Zone::query()->whereRaw('lower(name) = ?', [mb_strtolower($row['name'])])->first()?->update(['mirror_sources' => $toRefs($row['mirrors']) ?: null]);
@@ -275,7 +275,7 @@ final class YamlConfig
             $zoneNames = Zone::query()->pluck('name', 'id');
             $servers = array_map(fn ($row, $server) => $row + ['zone' => $zoneNames[$server->zone_id] ?? null], $servers, Server::query()->orderBy('group')->orderBy('name')->get()->all());
             $servers = array_map(fn ($row) => array_filter($row, fn ($v) => $v !== null), $servers);
-            $services = array_map(fn ($row, $service) => $row + ($service->zone_id ? ['zone' => $zoneNames[$service->zone_id] ?? null] : []) + (\App\Npm\Mirrors::refs($service->publish_zones) ? ['publish_in' => array_map(fn ($r) => ['zone' => $zoneNames[$r['zone_id']] ?? null, 'upstream' => $r['upstream']], \App\Npm\Mirrors::refs($service->publish_zones))] : []), $services, Service::query()->orderBy('group')->orderBy('name')->get()->all());
+            $services = array_map(fn ($row, $service) => $row + ($service->zone_id ? ['zone' => $zoneNames[$service->zone_id] ?? null] : []) + (\App\Npm\Mirrors::refs($service->publish_zones) ? ['publish_in' => array_map(fn ($r) => ['zone' => $zoneNames[$r['zone_id']] ?? null, 'upstream' => $r['upstream']] + (! empty($r['names']) ? ['names' => $r['names']] : []), \App\Npm\Mirrors::refs($service->publish_zones))] : []), $services, Service::query()->orderBy('group')->orderBy('name')->get()->all());
             $services = array_map(fn ($row) => array_filter($row, fn ($v) => $v !== null), $services);
         }
 
@@ -690,7 +690,7 @@ final class YamlConfig
      * A list of zones with an optional hop setting: `[Name, {zone: Other, upstream: https}]`.
      *
      * @param  list<string>  $errors
-     * @return list<array{zone: string, upstream: string}>
+     * @return list<array{zone: string, upstream: string, names?: list<string>}>
      */
     private static function zoneRefs(string $who, mixed $raw, array &$errors): array
     {
@@ -709,7 +709,19 @@ final class YamlConfig
             } elseif (! in_array($upstream, \App\Npm\Mirrors::UPSTREAMS, true)) {
                 $errors[] = "{$who}: upstream must be one of ".implode(', ', \App\Npm\Mirrors::UPSTREAMS);
             } else {
-                $out[] = ['zone' => $name, 'upstream' => $upstream];
+                $names = [];
+                $bad = false;
+                foreach (is_array($ref) ? (array) ($ref['names'] ?? []) : [] as $n) {
+                    if (! is_string($n) || ! Hosts::isHostname(trim($n))) {
+                        $errors[] = "{$who}: 'names' must be host names, not '".(is_scalar($n) ? $n : 'a list')."'";
+                        $bad = true;
+                    } else {
+                        $names[] = mb_strtolower(trim($n));
+                    }
+                }
+                if (! $bad) {
+                    $out[] = ['zone' => $name, 'upstream' => $upstream] + ($names !== [] ? ['names' => $names] : []);
+                }
             }
         }
 

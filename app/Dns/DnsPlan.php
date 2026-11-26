@@ -231,11 +231,39 @@ final class DnsPlan
                 if ($value === null) {
                     continue;
                 }
-                $mirrorInfo[] = ['target' => $b, 'source' => $w['source'], 'name' => $name, 'value' => $value];
+                $mirrorInfo[] = ['target' => $b, 'source' => $w['source'], 'name' => $name, 'value' => $value, 'upstream' => $w['upstream']];
                 if ($covered('inside', $name, $value) !== 'yes') {
                     $add($name, 'mirror', $b, 'inside', $value, 'mirror of '.$w['service']->name.' from the '.$w['source']->name.' zone: inside clients reach it through the '.$b->name.' proxy');
                     $explicit['inside|'.$name] = true;
                 }
+            }
+        }
+
+        // ---- one answer per name: two different answers for the same name are a conflict, and neither is written
+        $byName = [];
+        foreach ($records as $key => $r) {
+            if ($r['kind'] !== 'wildcard') {
+                $byName[$r['resolver'].'|'.$r['name']][] = $key;
+            }
+        }
+        foreach ($byName as $label => $keys) {
+            if (count($keys) < 2) {
+                continue;
+            }
+            $values = array_unique(array_map(fn ($k) => $records[$k]['value'], $keys));
+            if (count($values) === 1) {
+                foreach (array_slice($keys, 1) as $k) {
+                    unset($records[$k]); // the same answer twice is one answer
+                }
+
+                continue;
+            }
+            [$resolver, $name] = explode('|', $label, 2);
+            $who = array_map(fn ($k) => $records[$k]['kind'].' '.($records[$k]['note'] !== '' ? '('.$records[$k]['note'].') ' : '').'in '.$records[$k]['zone'].' → '.($records[$k]['value'] ?? 'unset'), $keys);
+            $conflicts[] = ['kind' => 'duplicate_name', 'severity' => 'error', 'key' => $name, 'resolver' => $resolver, 'zones' => array_values(array_unique(array_map(fn ($k) => $records[$k]['zone'], $keys))),
+                'message' => "{$name} would get more than one answer on the {$resolver} resolver: ".implode('; ', $who).'. No record is made for it until only one source wants it (for a mirror, untick the name on the service or move the service).'];
+            foreach ($keys as $k) {
+                unset($records[$k]);
             }
         }
 
@@ -245,7 +273,7 @@ final class DnsPlan
         // ---- a mirror whose upstream name resolves back to the mirroring proxy loops
         foreach ($mirrorInfo as $m) {
             $up = $m['source']->proxy_address;
-            if ($up === null || filter_var($up, FILTER_VALIDATE_IP)) {
+            if ($m['upstream'] === 'direct' || $up === null || filter_var($up, FILTER_VALIDATE_IP)) {
                 continue;
             }
             $resolved = self::lookup($records, 'inside', mb_strtolower($up));

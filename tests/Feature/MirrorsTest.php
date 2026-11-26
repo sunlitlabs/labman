@@ -45,7 +45,7 @@ class MirrorsTest extends TestCase
         $this->outer = FakeNpm::install(self::URL_OUTER);
         NpmAuto::setEnabled(false);
 
-        Settings::set(['local_domains' => 'home.example.com']);
+        Settings::set(['local_domains' => 'home.example.com, example.dev']);
         $this->internal = Zones::default();
         $this->internal->update(['name' => 'Internal', 'level' => 60, 'proxy_address' => '192.0.2.5']);
         $this->external = Zone::create(['name' => 'External', 'level' => 10, 'domains' => ['public' => ['example.dev']], 'proxy_address' => '203.0.113.5']);

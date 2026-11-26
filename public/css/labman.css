@@ -443,6 +443,8 @@ table.plain th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 
 .tile-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .tile-name { font-weight: 650; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-sub { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mirror-names { border: 0; margin: 0 0 12px 26px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.mirror-names legend { flex-basis: 100%; padding: 0; }
 .altrows { display: grid; gap: 8px; }
 .altrow { display: grid; grid-template-columns: 8rem 1fr 1.4fr; gap: 8px; }
 .althead { font-size: 0.8rem; color: var(--muted); }

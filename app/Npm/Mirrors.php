@@ -18,22 +18,24 @@ use Illuminate\Support\Collection;
  */
 final class Mirrors
 {
-    public const UPSTREAMS = ['auto', 'http', 'https', 'https_insecure'];
+    public const UPSTREAMS = ['auto', 'http', 'https', 'https_insecure', 'direct'];
 
     public const UPSTREAM_LABELS = [
         'auto' => 'Automatic (the safest that works)',
         'http' => 'HTTP',
         'https' => 'HTTPS, verify the certificate',
         'https_insecure' => 'HTTPS, do not verify (the target presents an origin certificate)',
+        'direct' => 'Direct to the service itself (skip the other proxy)',
     ];
 
     /** Marks a proxy host's advanced config as LabMan's mirror (and says what it mirrors). */
     public const MARKER = '# Managed by LabMan: mirror of';
 
     /**
-     * Clean a list of {zone_id, upstream} (the stored shape) from a form or file.
+     * Clean a list of {zone_id, upstream, names?} (the stored shape) from a form or file. `names` (only on a service's
+     * own list) picks which of the service's names that mirror covers; without it the zone's own domains decide.
      *
-     * @return list<array{zone_id: int, upstream: string}>
+     * @return list<array{zone_id: int, upstream: string, names?: list<string>}>
      */
     public static function refs(mixed $value): array
     {
@@ -41,11 +43,81 @@ final class Mirrors
         foreach (is_array($value) ? $value : [] as $ref) {
             if (is_array($ref) && isset($ref['zone_id']) && (int) $ref['zone_id'] > 0) {
                 $upstream = in_array($ref['upstream'] ?? 'auto', self::UPSTREAMS, true) ? $ref['upstream'] : 'auto';
-                $out[(int) $ref['zone_id']] = ['zone_id' => (int) $ref['zone_id'], 'upstream' => $upstream];
+                $names = array_values(array_unique(array_filter(array_map(fn ($n) => mb_strtolower(trim((string) $n)), (array) ($ref['names'] ?? [])), fn ($n) => $n !== '')));
+                $out[(int) $ref['zone_id']] = ['zone_id' => (int) $ref['zone_id'], 'upstream' => $upstream] + ($names !== [] ? ['names' => $names] : []);
             }
         }
 
         return array_values($out);
+    }
+
+    /** Every host name of a service that a mirror could cover, lower case. @return list<string> */
+    public static function namesOf(Service $service): array
+    {
+        return array_values(array_unique(array_filter([mb_strtolower((string) $service->domain), mb_strtolower((string) $service->public_domain)])));
+    }
+
+    /**
+     * The zones whose domains the INSIDE resolver answers for $name, by longest suffix (as the DNS plan claims them): a
+     * zone's local domains, plus its public ones when it answers them inside too (split-horizon). A tie goes to the
+     * owner picked on the DNS plan, if any.
+     *
+     * @return list<Zone>
+     */
+    public static function insideOwners(string $name, ?Collection $zones = null): array
+    {
+        $name = mb_strtolower(rtrim(trim($name), '.'));
+        $best = -1;
+        $bestDomain = null;
+        $found = [];
+
+        foreach ($zones ?? Zone::query()->get() as $zone) {
+            $d = $zone->domains();
+            $domains = array_merge($d['local'], $zone->dnsSettings()['split_horizon'] ? $d['public'] : []);
+            foreach ($domains as $domain) {
+                $domain = mb_strtolower($domain);
+                if ($name === $domain || str_ends_with($name, '.'.$domain)) {
+                    if (strlen($domain) > $best) {
+                        [$best, $bestDomain, $found] = [strlen($domain), $domain, []];
+                    }
+                    if (strlen($domain) === $best && ! in_array($zone, $found, true)) {
+                        $found[] = $zone;
+                    }
+                }
+            }
+        }
+
+        if (count($found) > 1 && $bestDomain !== null && ($pick = \App\Dns\DnsOwners::domainOwner($bestDomain)) !== null) {
+            $picked = array_values(array_filter($found, fn ($z) => $z->id === $pick));
+            if ($picked !== []) {
+                return $picked;
+            }
+        }
+
+        return $found;
+    }
+
+    /** Does the inside resolver answer $name with $target's own domains? */
+    public static function answeredBy(Zone $target, string $name, ?Collection $zones = null): bool
+    {
+        foreach (self::insideOwners($name, $zones) as $owner) {
+            if ($owner->id === $target->id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The names of $service that a mirror in $target covers unless the service says otherwise: those under the mirroring
+     * zone's own domains. Names another zone owns (and answers itself) are left alone.
+     *
+     * @return list<string>
+     */
+    public static function defaultNames(Service $service, Zone $target, ?Collection $zones = null): array
+    {
+        return array_values(array_filter(self::namesOf($service), fn ($n) => self::answeredBy($target, $n, $zones)));
     }
 
     /** The zones $target mirrors, as source zone id => upstream. @return array<int, string> */
@@ -79,13 +151,18 @@ final class Mirrors
                 continue;
             }
 
-            $own = array_column(self::refs($service->publish_zones), 'upstream', 'zone_id');
-            $upstream = $own[$target->id] ?? $rules[$source->id] ?? null;
+            $ref = array_column(self::refs($service->publish_zones), null, 'zone_id')[$target->id] ?? null;
+            $upstream = $ref['upstream'] ?? $rules[$source->id] ?? null;
             if ($upstream === null) {
                 continue;
             }
 
-            foreach (array_unique(array_filter([mb_strtolower((string) $service->domain), mb_strtolower((string) $service->public_domain)])) as $domain) {
+            // Only the names the mirroring zone answers, unless the service picked its names for this zone.
+            $chosen = $ref !== null && ! empty($ref['names'])
+                ? array_values(array_intersect(self::namesOf($service), $ref['names']))
+                : self::defaultNames($service, $target, $zones);
+
+            foreach ($chosen as $domain) {
                 $out[$domain] ??= ['service' => $service, 'source' => $source, 'domain' => $domain, 'upstream' => $upstream];
             }
         }
@@ -119,9 +196,18 @@ final class Mirrors
     }
 
     /** The nginx lines that keep the Host header, SNI and certificate checking right for one kind of hop. */
-    public static function advancedConfig(string $upstream, string $sourceName): string
+    public static function advancedConfig(string $upstream, string $sourceName, ?string $backendScheme = null): string
     {
         $lines = [self::MARKER.' '.$sourceName, 'proxy_set_header Host $host;'];
+
+        if ($upstream === 'direct') {
+            // Straight to the service: its own certificate is rarely one a public CA bundle verifies.
+            if ($backendScheme === 'https') {
+                array_push($lines, 'proxy_ssl_server_name on;', 'proxy_ssl_name $host;', 'proxy_ssl_verify off;');
+            }
+
+            return implode("\n", $lines);
+        }
 
         if ($upstream !== 'http') {
             $lines[] = 'proxy_ssl_server_name on;';
@@ -148,6 +234,9 @@ final class Mirrors
      */
     public static function chooseUpstream(string $setting, Zone $source, ?array $sourceHost, ?array $sourceCert): array
     {
+        if ($setting === 'direct') {
+            return ['upstream' => 'direct', 'why' => 'direct to the service itself, not through the '.$source->name.' proxy'];
+        }
         if ($setting !== 'auto') {
             return ['upstream' => $setting, 'why' => 'as set: '.self::UPSTREAM_LABELS[$setting]];
         }

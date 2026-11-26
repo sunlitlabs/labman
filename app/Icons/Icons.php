@@ -140,13 +140,18 @@ final class Icons
     /** The slug to show for a service or server, or null for none. */
     public static function slugFor(Service|Server|\App\Models\Link $model): ?string
     {
-        if (! Settings::icons()) {
-            return null;
-        }
-
         $icon = $model->icon;
 
         if ($icon === 'none') {
+            return null;
+        }
+
+        // LabMan's own logo ships with the app: no library, no download, so it shows even with icons switched off.
+        if ($icon === self::OWN || (blank($icon) && self::isLabman($model))) {
+            return self::OWN;
+        }
+
+        if (! Settings::icons()) {
             return null;
         }
 
@@ -155,6 +160,20 @@ final class Icons
         }
 
         return self::match($model->name, $model instanceof \App\Models\Link ? null : $model->domain);
+    }
+
+    /** The slug of LabMan's own logo. */
+    public const OWN = 'labman';
+
+    /** Is this item LabMan itself: named LabMan ("LabMan", "LabMan itself") or served from a labman.* name? */
+    public static function isLabman(Service|Server|\App\Models\Link $model): bool
+    {
+        if (str_starts_with(self::normalise((string) $model->name), 'labman')) {
+            return true;
+        }
+        $domain = $model instanceof \App\Models\Link ? null : $model->domain;
+
+        return $domain !== null && strtolower(explode('.', $domain)[0]) === 'labman';
     }
 
     /** Best library match for a display name (and optionally a domain), or null. */
@@ -235,6 +254,10 @@ final class Icons
      */
     public static function image(string $slug): ?array
     {
+        if ($slug === self::OWN && is_file(public_path('favicon.svg'))) {
+            return ['body' => (string) file_get_contents(public_path('favicon.svg')), 'type' => 'image/svg+xml'];
+        }
+
         if (! self::validSlug($slug) || ! Settings::icons()) {
             return null;
         }

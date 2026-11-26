@@ -79,6 +79,12 @@ class IconsTest extends TestCase
         $this->library();
 
         $this->assertSame('plex', Icons::slugFor(new Service(['name' => 'Jellyfin', 'icon' => 'plex'])));
+        $this->assertSame('labman', Icons::slugFor(new Service(['name' => 'LabMan'])));
+        $this->assertSame('labman', Icons::slugFor(new Service(['name' => 'LabMan itself'])));
+        $this->assertSame('labman', Icons::slugFor(new Service(['name' => 'Dashboard', 'domain' => 'labman.example.com'])));
+        $this->assertSame('labman', Icons::slugFor(new Server(['name' => 'LabMan node', 'address' => '192.0.2.5'])));
+        $this->assertNull(Icons::slugFor(new Service(['name' => 'LabMan', 'icon' => 'none'])), 'an explicit none wins');
+        $this->assertSame('image/svg+xml', Icons::image('labman')['type']);
         $this->assertNull(Icons::slugFor(new Service(['name' => 'Jellyfin', 'icon' => 'none'])));
         $this->assertSame('jellyfin', Icons::slugFor(new Service(['name' => 'Jellyfin'])));
         $this->assertSame('proxmox', Icons::slugFor(new Server(['name' => 'Proxmox', 'address' => '192.0.2.1'])));

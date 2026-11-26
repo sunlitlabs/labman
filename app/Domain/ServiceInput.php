@@ -54,11 +54,21 @@ final class ServiceInput
         // The form posts the zones to also publish in (checkboxes) and a hop setting for each; a marker lets "none ticked" clear it.
         if (array_key_exists('publish_form', $in)) {
             $refs = [];
+            $all = \App\Support\Zones::all();
+            $names = array_values(array_unique(array_filter([mb_strtolower((string) ($in['domain'] ?? '')), mb_strtolower((string) ($in['public_domain'] ?? ''))])));
             foreach ((array) ($in['publish_in'] ?? []) as $id) {
-                $refs[] = ['zone_id' => (int) $id, 'upstream' => ((array) ($in['publish_upstream'] ?? []))[$id] ?? 'auto'];
+                $ref = ['zone_id' => (int) $id, 'upstream' => ((array) ($in['publish_upstream'] ?? []))[$id] ?? 'auto'];
+                // The names ticked for this zone; exactly the zone's own default set is stored as "no choice", so it keeps following the rule.
+                $ticked = array_values(array_unique(array_map(fn ($n) => mb_strtolower(trim((string) $n)), (array) (((array) ($in['publish_names'] ?? []))[$id] ?? []))));
+                $zone = $all->firstWhere('id', (int) $id);
+                $default = $zone ? array_values(array_filter($names, fn ($n) => \App\Npm\Mirrors::answeredBy($zone, $n, $all))) : [];
+                if ($ticked !== [] && array_diff($ticked, $default) !== [] || ($ticked !== [] && array_diff($default, $ticked) !== [])) {
+                    $ref['names'] = $ticked;
+                }
+                $refs[] = $ref;
             }
             $in['publish_zones'] = $refs;
-            unset($in['publish_form'], $in['publish_in'], $in['publish_upstream']);
+            unset($in['publish_form'], $in['publish_in'], $in['publish_upstream'], $in['publish_names']);
         }
         if (array_key_exists('cert_mode', $in) && $in['cert_mode'] === 'auto') {
             $in['cert_mode'] = null;
@@ -125,6 +135,8 @@ final class ServiceInput
             'publish_zones' => ['nullable', 'array', 'max:20'],
             'publish_zones.*.zone_id' => ['required', 'integer', 'exists:zones,id'],
             'publish_zones.*.upstream' => ['required', Rule::in(\App\Npm\Mirrors::UPSTREAMS)],
+            'publish_zones.*.names' => ['nullable', 'array', 'max:20'],
+            'publish_zones.*.names.*' => ['string', 'max:253', Check::hostname()],
             'cert_mode' => ['nullable', 'string', 'regex:/^(none|letsencrypt_http|letsencrypt_dns|existing:[1-9][0-9]*)$/'],
         ];
     }

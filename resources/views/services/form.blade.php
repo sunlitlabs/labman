@@ -176,7 +176,9 @@
 
             @if (\App\Support\Zones::multiple())
                 @php($ownZone = $service->exists ? \App\Support\Zones::of($service) : null)
-                @php($published = array_column(\App\Npm\Mirrors::refs($service->publish_zones), 'upstream', 'zone_id'))
+                @php($publishedRefs = array_column(\App\Npm\Mirrors::refs($service->publish_zones), null, 'zone_id'))
+                @php($published = array_column($publishedRefs, 'upstream', 'zone_id'))
+                @php($serviceNames = \App\Npm\Mirrors::namesOf($service))
                 <section class="formcard">
                     <h2>Also publish in</h2>
                     <p class="sub">Other zones whose proxy should answer for this service's names too (a mirror that forwards to {{ $ownZone ? 'the '.$ownZone->name.' zone' : 'its own zone' }}'s proxy). Off unless ticked; a zone can also mirror a whole zone on its own page. Nothing changes in NPM until you apply a previewed push.</p>
@@ -196,7 +198,18 @@
                                 </select>
                             </div>
                         </div>
+                        @if ($serviceNames !== [])
+                            @php($defaults = \App\Npm\Mirrors::defaultNames($service, $z))
+                            @php($ticked = ! empty($publishedRefs[$z->id]['names']) ? $publishedRefs[$z->id]['names'] : $defaults)
+                            <fieldset class="mirror-names">
+                                <legend class="hint">Names {{ $z->name }} answers for this service <span class="muted">(ticked by its own domains{{ $defaults === [] ? ': none of this service\'s names are under them' : '' }})</span></legend>
+                                @foreach ($serviceNames as $n)
+                                    <label class="check"><input type="checkbox" name="publish_names[{{ $z->id }}][]" value="{{ $n }}" @checked(in_array($n, $ticked, true))><span class="mono">{{ $n }}</span></label>
+                                @endforeach
+                            </fieldset>
+                        @endif
                     @endforeach
+                    <p class="hint"><strong>Direct</strong> forwards straight to this service instead of through its own zone's proxy, for a zone that can reach the service but not that proxy. The service then sees the mirroring proxy's address as the client, so apps with a trusted-proxy list (Home Assistant, for one) need it added.</p>
                 </section>
             @endif
 

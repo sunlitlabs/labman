@@ -238,7 +238,7 @@ class McpZonesTest extends TestCase
         $this->assertSame('External', $svc['zone']);
         $this->assertTrue($svc['zone_set_on_service']);
         $this->assertSame('letsencrypt_dns', $svc['certificate']);
-        $this->assertSame([['zone' => 'Internal', 'upstream' => 'http']], $svc['publish_in']);
+        $this->assertSame(['Internal', 'http', false], [$svc['publish_in'][0]['zone'], $svc['publish_in'][0]['upstream'], $svc['publish_in'][0]['names_chosen']]);
 
         $back = $this->ok('set_service_zone', ['service' => 'Wiki', 'zone' => '', 'certificate' => 'auto', 'publish_in' => []]);
         $this->assertFalse($back['zone_set_on_service']);
@@ -404,6 +404,7 @@ class McpZonesTest extends TestCase
     public function test_mirrors_are_listed_previewed_and_orphans_forgotten_without_touching_npm(): void
     {
         [$internal, $external] = $this->lab();
+        Settings::set(['local_domains' => 'home.example.com, example.dev']); // Internal answers example.dev inside, so it mirrors the blog
         $this->cert($this->inner, 1, ['*.example.dev']);
         $this->assertSame([], $this->ok('list_mirrors')['zones']);
         $this->assertStringContainsString('update_zone', $this->ok('list_mirrors')['next']);

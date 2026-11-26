@@ -166,8 +166,7 @@ class DnsPlanTest extends TestCase
 
     public function test_a_mirrors_name_is_answered_inside_by_the_mirroring_zones_proxy(): void
     {
-        Service::create(['name' => 'Blog', 'address' => '198.51.100.7', 'zone_id' => $this->external->id, 'public_domain' => 'blog.example.dev', 'scheme' => 'http', 'path' => '/']);
-        $this->internal->update(['mirror_sources' => [['zone_id' => $this->external->id, 'upstream' => 'auto']]]);
+        Service::create(['name' => 'Blog', 'address' => '198.51.100.7', 'zone_id' => $this->external->id, 'public_domain' => 'blog.example.dev', 'scheme' => 'http', 'path' => '/', 'publish_zones' => [['zone_id' => $this->internal->id, 'upstream' => 'auto', 'names' => ['blog.example.dev']]]]);
 
         $plan = DnsPlan::build();
 
@@ -180,8 +179,7 @@ class DnsPlanTest extends TestCase
 
     public function test_a_mirror_whose_upstream_name_resolves_to_its_own_proxy_is_an_error(): void
     {
-        Service::create(['name' => 'Blog', 'address' => '198.51.100.7', 'zone_id' => $this->external->id, 'public_domain' => 'blog.example.dev', 'scheme' => 'http', 'path' => '/']);
-        $this->internal->update(['mirror_sources' => [['zone_id' => $this->external->id, 'upstream' => 'auto']]]);
+        Service::create(['name' => 'Blog', 'address' => '198.51.100.7', 'zone_id' => $this->external->id, 'public_domain' => 'blog.example.dev', 'scheme' => 'http', 'path' => '/', 'publish_zones' => [['zone_id' => $this->internal->id, 'upstream' => 'auto', 'names' => ['blog.example.dev']]]]);
         $this->external->update(['proxy_address' => 'edge.home.example.com']); // under the inside wildcard: answered by the Internal proxy
 
         $c = $this->conflict(DnsPlan::build(), 'mirror_loop');

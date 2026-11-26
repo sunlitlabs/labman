@@ -652,9 +652,13 @@ final class NpmSync
         // Orphans are only reported for a full plan; a run limited to some services must not list unrelated ones.
         if ($only === null && ! $auto) {
             foreach (Mirrors::orphans($this->zone, $wanted) as $orphan) {
-                $why = $orphan->service_id && Service::query()->whereKey($orphan->service_id)->exists()
-                    ? 'No mirror rule or publish setting asks for it any more.'
-                    : 'Its service no longer exists or no longer has this name.';
+                $svc = $orphan->service_id ? Service::query()->find($orphan->service_id) : null;
+                $why = match (true) {
+                    $svc !== null && in_array(mb_strtolower($orphan->domain), Mirrors::namesOf($svc), true) && ! Mirrors::answeredBy($this->zone, mb_strtolower($orphan->domain), $zones)
+                        => "The {$this->zone->name} zone does not answer this name (it is outside the zone's own domains), so it is no longer mirrored here.",
+                    $svc !== null => 'No mirror rule or publish setting asks for it any more.',
+                    default => 'Its service no longer exists or no longer has this name.',
+                };
                 $title = 'Orphaned mirror: '.$orphan->domain.' ('.$orphan->service_name.')';
                 $host = $orphan->npm_host_id ? $hosts->first(fn ($h) => (int) $h['id'] === $orphan->npm_host_id) : null;
                 $isOurs = $host !== null && in_array(mb_strtolower($orphan->domain), array_map('mb_strtolower', (array) ($host['domain_names'] ?? [])), true) && str_contains((string) ($host['advanced_config'] ?? ''), Mirrors::MARKER);
@@ -678,11 +682,14 @@ final class NpmSync
         $base = ['key' => "mirror:{$service->id}:{$domain}", 'title' => "{$domain} ← {$source->name} zone (mirror of {$service->name})"];
         $blocked = fn (string $why) => $this->finish($base + ['action' => 'skip'], [$why]);
 
-        $target = $source->proxy_address;
+        $direct = $w['upstream'] === 'direct';
+        $target = $direct ? $service->backendAddress() : $source->proxy_address;
         if ($target === null || $target === '') {
-            return $blocked("Set the proxy address of the {$source->name} zone (what other proxies forward to). Without it there is nothing to forward the mirror to.");
+            return $blocked($direct
+                ? "{$service->name} has no backend address to forward to directly."
+                : "Set the proxy address of the {$source->name} zone (what other proxies forward to). Without it there is nothing to forward the mirror to.");
         }
-        if (mb_strtolower($target) === $domain) {
+        if (! $direct && mb_strtolower($target) === $domain) {
             return $blocked("The {$source->name} zone's proxy address is the mirrored name itself, so the mirror would loop. Use an IP address or a name that resolves straight to that proxy.");
         }
 
@@ -693,18 +700,18 @@ final class NpmSync
         }
 
         // What to forward to: automatic looks at how the source zone's proxy serves the name.
-        $sourceHosts = $this->otherZone($source);
+        $sourceHosts = $direct ? null : $this->otherZone($source);
         $sourceHost = $sourceHosts === null ? null : (collect($sourceHosts)->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true)));
         $sourceCert = $sourceHost !== null && (int) ($sourceHost['certificate_id'] ?? 0) > 0 ? collect($this->otherCerts[$source->id] ?? [])->firstWhere('id', (int) $sourceHost['certificate_id']) : null;
         $choice = Mirrors::chooseUpstream($w['upstream'], $source, $sourceHost, $sourceCert);
         $upstream = $choice['upstream'];
-        $port = $upstream === 'http' ? 80 : 443;
-        $scheme = $upstream === 'http' ? 'http' : 'https';
+        $port = $direct ? $service->effectivePort() : ($upstream === 'http' ? 80 : 443);
+        $scheme = $direct ? $service->scheme : ($upstream === 'http' ? 'http' : 'https');
 
         $desired = [
             'forward_scheme' => $scheme, 'forward_host' => $target, 'forward_port' => $port,
             'allow_websocket_upgrade' => (bool) $service->websockets,
-            'advanced_config' => Mirrors::advancedConfig($upstream, $source->name),
+            'advanced_config' => Mirrors::advancedConfig($upstream, $source->name, $direct ? $service->scheme : null),
         ];
 
         // The mirror's own certificate on this proxy: browser-trusted, never the source's (they are different proxies).
@@ -713,10 +720,14 @@ final class NpmSync
         if ($this->zone->level < $source->level) {
             $warnings[] = "The {$this->zone->name} proxy (level {$this->zone->level}) reaches into the more trusted {$source->name} zone (level {$source->level}). Lower zones should not initiate connections to higher ones.";
         }
-        if (! filter_var($target, FILTER_VALIDATE_IP) && ($owner = Zones::owners($target)) !== []) {
+        if ($direct) {
+            $mine = filled($this->zone->proxy_address) ? " ({$this->zone->proxy_address})" : '';
+            $warnings[] = "Direct: the backend will now see the {$this->zone->name} proxy's address{$mine} as the client, not the {$source->name} proxy's. Apps with a trusted-proxy list, such as Home Assistant, need this address added or they will reject the forwarded headers.";
+        }
+        if (! $direct && ! filter_var($target, FILTER_VALIDATE_IP) && ($owner = Zones::owners($target)) !== []) {
             $warnings[] = "The {$source->name} proxy address '{$target}' is a name under a zone domain; if it resolves to this proxy the mirror loops. An IP address is safest.";
         }
-        $note = "Forwards to {$target}:{$port} over {$scheme} ({$choice['why']}), keeping the original Host header".($scheme === 'https' ? ' and SNI' : '').'.';
+        $note = "Forwards to {$target}:{$port} over {$scheme} ({$choice['why']}), keeping the original Host header".($scheme === 'https' ? ' and SNI' : '').($direct && $service->websockets ? ', with WebSocket upgrades allowed' : '').'.';
 
         $host = $hosts->first(fn ($h) => $record?->npm_host_id !== null && (int) $h['id'] === (int) $record->npm_host_id)
             ?? $hosts->first(fn ($h) => in_array($domain, array_map('mb_strtolower', (array) ($h['domain_names'] ?? [])), true));
