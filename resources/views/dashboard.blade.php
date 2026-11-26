@@ -162,6 +162,9 @@
                                 @include('partials.icon', ['model' => $server])
                                 <div class="tile-body">
                                     <span class="tile-name">{{ $server->name }}@if ($zoneName)<span class="zone-chip zone-c{{ ($zoneOf['servers'][$server->id] ?? 0) % 8 }}">{{ $zoneName }}</span>@endif</span>
+                                    @if ($server->domain)
+                                        <a class="tile-sub" href="http://{{ $server->domain }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->domain }}">{{ $server->domain }}</a>
+                                    @endif
                                     <a class="tile-sub mono" href="{{ $server->addressUrl() }}" target="_blank" rel="noopener noreferrer" title="Open http://{{ $server->address }}"><span class="dot" data-dot="backend" data-dot-state="{{ $dot['backend']['state'] ?? 'unknown' }}" title="{{ $dot['backend']['title'] ?? 'Not checked' }}"></span>{{ $server->address }}</a>
                                     <small class="tile-detail" data-detail>@if ($bad){{ $bad['label'] }} · {{ $bad['detail'] }}@endif</small>
                                     @foreach ($alts as $i => $alt)

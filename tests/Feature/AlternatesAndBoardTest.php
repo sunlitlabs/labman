@@ -101,6 +101,19 @@ class AlternatesAndBoardTest extends TestCase
             ->assertSee('Wi-Fi')->assertSee('kvm-wifi.example.com');
     }
 
+    public function test_a_server_tile_shows_its_domain_as_well_as_its_address(): void
+    {
+        $this->actingAs($this->admin());
+        Server::create(['name' => 'Nas', 'address' => '192.0.2.20', 'domain' => 'nas.example.com']);
+        Server::create(['name' => 'Bare', 'address' => '192.0.2.21']);
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $this->assertStringContainsString('href="http://nas.example.com"', $html);
+        $this->assertSame(1, substr_count($html, 'href="http://nas.example.com"'));
+        $this->assertStringContainsString('192.0.2.20', $html);
+    }
+
     public function test_the_yaml_and_mcp_carry_further_addresses_and_families(): void
     {
         $this->actingAs($this->admin());
