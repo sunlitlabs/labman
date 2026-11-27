@@ -63,7 +63,10 @@ ENV APP_ENV=production \
 
 COPY --from=vendor-prod /app/vendor ./vendor
 COPY . .
-COPY docker/Caddyfile /etc/caddy/Caddyfile
+# Caddyfile and baseline php.ini come from sunlitlabs/foundation and update with the package;
+# zz-labman.ini (LabMan's stricter upload limits) loads after the baseline.
+COPY --from=vendor-prod /app/vendor/sunlitlabs/foundation/docker/Caddyfile /etc/caddy/Caddyfile
+COPY --from=vendor-prod /app/vendor/sunlitlabs/foundation/docker/php.ini /usr/local/etc/php/conf.d/foundation.ini
 COPY docker/entrypoint.sh /usr/local/bin/labman-entrypoint
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-labman.ini
 

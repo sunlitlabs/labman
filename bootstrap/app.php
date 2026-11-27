@@ -3,11 +3,12 @@
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureScreenAccess;
 use App\Http\Middleware\EnsureUserIsActive;
-use App\Http\Middleware\RedirectToSetup;
-use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Sunlit\Foundation\Foundation;
+use Sunlit\Foundation\Http\Middleware\RedirectToSetup;
+use Sunlit\Foundation\Http\Middleware\SecurityHeaders;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -20,9 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Behind a reverse proxy, set LABMAN_TRUSTED_PROXIES (comma separated IPs/CIDRs, or *).
-        if ($proxies = env('LABMAN_TRUSTED_PROXIES')) {
-            $middleware->trustProxies(at: $proxies === '*' ? '*' : array_map('trim', explode(',', $proxies)));
-        }
+        Foundation::trustProxies($middleware, 'LABMAN_TRUSTED_PROXIES');
+
+        // RedirectToSetup and SecurityHeaders come from sunlitlabs/foundation (configured in config/foundation.php).
 
         $middleware->web(prepend: [\App\Http\Middleware\NodeModeOnly::class, RedirectToSetup::class], append: [EnsureUserIsActive::class, SecurityHeaders::class]);
 

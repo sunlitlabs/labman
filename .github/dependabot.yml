@@ -1,0 +1,14 @@
+# Opens a pull request whenever sunlitlabs/foundation publishes a new release, so shared
+# fixes reach this app without anyone remembering to run `composer update`.
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: daily
+    allow:
+      - dependency-name: sunlitlabs/foundation
+    commit-message:
+      prefix: chore
+    labels:
+      - dependencies

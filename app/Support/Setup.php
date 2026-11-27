@@ -2,34 +2,24 @@
 
 namespace App\Support;
 
-use App\Models\User;
-use Throwable;
+use Sunlit\Foundation\Setup\SetupState;
 
-/** First-run state: LabMan is "set up" once an admin exists, permanently. */
+/**
+ * First-run state: LabMan is "set up" once an admin exists, permanently.
+ *
+ * The monotonic state and the /setup redirect come from sunlitlabs/foundation; the rule
+ * ("an admin exists", and a node has no setup at all) is registered in AppServiceProvider.
+ */
 final class Setup
 {
-    private static bool $complete = false;
-
     public static function isComplete(): bool
     {
-        if (\App\Node\Mode::isNode()) {
-            return true; // a node has no accounts and no setup
-        }
-
-        if (self::$complete) {
-            return true; // monotonic: once true it never goes back
-        }
-
-        try {
-            return self::$complete = User::query()->where('role', User::ROLE_ADMIN)->exists();
-        } catch (Throwable) {
-            return false; // tables not migrated yet
-        }
+        return app(SetupState::class)->isComplete();
     }
 
-    /** For tests. */
+    /** Forget the remembered state (after the wizard, and between tests). */
     public static function reset(): void
     {
-        self::$complete = false;
+        app(SetupState::class)->reset();
     }
 }

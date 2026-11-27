@@ -1,5 +1,7 @@
 # LabMan Homelab Manager
 
+> Built on [sunlitlabs/foundation](https://github.com/sunlitlabs/foundation), a small, public, MIT-licensed baseline shared by Sunlit Labs apps. It provides first-run setup, the admin resolver, security headers, the Docker entrypoint steps and the Caddyfile. Its only dependency is Laravel itself.
+
 **LabMan Homelab Manager** (LabMan for short) is a self-hostable **heads-up display and manager for a home lab**. A dashboard to land on, two lists behind it:
 
 - **Dashboard** (the home page): an overall "all systems operational / 2 items need attention" banner and a tile per service and server, each with an icon matched from its name. Click a service tile to open it, a server tile to copy its SSH command. Updates live.
@@ -331,7 +333,7 @@ Three kinds of visitor: **guest**, **user**, **admin**. For each of the four scr
 | YAML config | `app/Config/YamlConfig.php` |
 | Admin panel | `app/Support/AdminNav.php` (sidebar model), `AdminController` (overview), `resources/views/layouts/admin.blade.php` |
 | Access rules | `app/Support/Access.php`, middleware `screen:` and `admin`, gates `view-screen` / `admin` |
-| Setup wizard | `app/Http/Controllers/SetupController.php`, middleware `RedirectToSetup` |
+| Setup wizard | `app/Http/Controllers/SetupController.php`, middleware `RedirectToSetup` (from sunlitlabs/foundation, configured in `config/foundation.php`) |
 | Shared validation | `app/Domain` (`ServerInput`, `ServiceInput`, `SettingsInput`, `UserAdmin`): used by the forms **and** the MCP tools |
 | MCP server | `app/Mcp` (protocol, tools), `app/Http/Controllers/McpController.php`, `routes/mcp.php`, `AuthenticateApiToken` |
 | Nginx Proxy Manager | `app/Npm`: `NpmClient`, `Connection` (encrypted login), `NpmSync` (plan / fingerprint / apply) |

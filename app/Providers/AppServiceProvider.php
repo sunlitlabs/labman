@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Sunlit\Foundation\Admin\Admins;
+use Sunlit\Foundation\Setup\SetupState;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -40,5 +42,12 @@ class AppServiceProvider extends ServiceProvider
 
         // Editing anything is admin-only.
         Gate::define('admin', fn (?User $user) => Access::isAdmin($user));
+
+        // sunlitlabs/foundation: who is an admin (active users with the admin role), and when
+        // first-run setup is complete (an admin exists; a node has no accounts and no setup).
+        app(Admins::class)->resolveUsing(fn (User $user): bool => Access::isAdmin($user));
+        app(SetupState::class)->completeUsing(
+            fn (): bool => \App\Node\Mode::isNode() || User::query()->where('role', User::ROLE_ADMIN)->exists(),
+        );
     }
 }

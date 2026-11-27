@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Http\Middleware\RedirectToSetup;
 use App\Models\Server;
 use App\Models\User;
 use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Sunlit\Foundation\Http\Middleware\RedirectToSetup;
 use Tests\TestCase;
 
 class SetupTest extends TestCase
